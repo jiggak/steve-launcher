@@ -1,38 +1,45 @@
-mod mc_json;
+mod cli;
+mod json;
 
-use mc_json::{VersionManifest, GameManifest};
-use serde_json;
+use cli::{Parser, Cli, Commands};
+use json::{VersionManifest, VersionManifestEntry, GameManifest};
 
 #[tokio::main(flavor = "current_thread")]
-async fn main2() -> Result<(), Box<dyn std::error::Error>> {
-    let manifest = reqwest::get("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json")
-        .await?
-        .json::<VersionManifest>()
-        .await?;
+async fn main() -> Result<(), &'static str> {
+    let cli = Cli::parse();
 
-    println!("{}", manifest.versions[0].url);
-
-    let game_manifest = reqwest::get(manifest.versions[0].url.as_str())
-        .await?
-        .json::<GameManifest>()
-        .await?;
-
-    for lib in game_manifest.libraries {
-        println!("{:?}", lib.name);
+    match cli.command {
+        Commands::Create { dir, mc_version } =>
+            create(&dir, &mc_version).await
     }
-
-    Ok(())
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let file = std::fs::File::open("1.7.10.json")?;
-    let reader = std::io::BufReader::new(file);
+async fn get_version_manifest() -> Result<VersionManifest, reqwest::Error> {
+    reqwest::get("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json")
+        .await?
+        .json::<VersionManifest>()
+        .await
+}
 
-    let game_manifest: GameManifest = serde_json::from_reader(reader)?;
+async fn get_game_manifest(version: &VersionManifestEntry) -> Result<GameManifest, reqwest::Error> {
+    reqwest::get(version.url.as_str())
+        .await?
+        .json::<GameManifest>()
+        .await
+}
 
-    for lib in game_manifest.libraries.iter() {
-        println!("{:?}", lib.name);
-    }
+async fn create(dir: &str, mc_version: &str) -> Result<(), &'static str> {
+    let manifest = get_version_manifest()
+        .await.map_err(|e| "get_version_manifest failed")?;
+
+    let version = match manifest.versions.iter().find(|v| v.id == mc_version) {
+        Some(version) => version,
+        None => return Err("Version not found")
+    };
+
+    println!("downloading from {}", version.url);
+    let game_manifest = get_game_manifest(version)
+        .await.map_err(|e| "get_game_manifest failed")?;
 
     Ok(())
 }
