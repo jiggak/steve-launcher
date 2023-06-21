@@ -1,45 +1,34 @@
 mod cli;
-mod json;
 
 use cli::{Parser, Cli, Commands};
-use json::{VersionManifest, VersionManifestEntry, GameManifest};
+use indicatif::ProgressBar;
+use mcli::{create_instance, Progress};
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<(), &'static str> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Create { dir, mc_version } =>
-            create(&dir, &mc_version).await
+        Commands::Create { dir, mc_version } => {
+            let mut handler = ProgressHandler {
+                progress: None
+            };
+
+            create_instance(&dir, &mc_version, &mut handler).await
+        }
     }
 }
 
-async fn get_version_manifest() -> Result<VersionManifest, reqwest::Error> {
-    reqwest::get("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json")
-        .await?
-        .json::<VersionManifest>()
-        .await
+struct ProgressHandler {
+    progress: Option<ProgressBar>
 }
 
-async fn get_game_manifest(version: &VersionManifestEntry) -> Result<GameManifest, reqwest::Error> {
-    reqwest::get(version.url.as_str())
-        .await?
-        .json::<GameManifest>()
-        .await
-}
+impl Progress for ProgressHandler {
+    fn advance(&mut self, current: usize) {
+        self.progress.as_ref().unwrap().set_position(current as u64);
+    }
 
-async fn create(dir: &str, mc_version: &str) -> Result<(), &'static str> {
-    let manifest = get_version_manifest()
-        .await.map_err(|e| "get_version_manifest failed")?;
-
-    let version = match manifest.versions.iter().find(|v| v.id == mc_version) {
-        Some(version) => version,
-        None => return Err("Version not found")
-    };
-
-    println!("downloading from {}", version.url);
-    let game_manifest = get_game_manifest(version)
-        .await.map_err(|e| "get_game_manifest failed")?;
-
-    Ok(())
+    fn begin(&mut self, total: usize) {
+        self.progress = Some(ProgressBar::new(total as u64));
+    }
 }
