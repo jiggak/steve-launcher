@@ -10,10 +10,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match cli.command {
         Commands::Create { dir, mc_version } => {
-            let mut handler = ProgressHandler {
-                progress: None
-            };
-
+            let mut handler = ProgressHandler::new();
             create_instance(&dir, &mc_version, &mut handler).await
         }
     }
@@ -21,6 +18,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 struct ProgressHandler {
     progress: Option<ProgressBar>
+}
+
+impl ProgressHandler {
+    fn new() -> Self {
+        ProgressHandler {
+            progress: None
+        }
+    }
 }
 
 impl Progress for ProgressHandler {

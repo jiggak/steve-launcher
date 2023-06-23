@@ -17,3 +17,8 @@ pub fn get_assets_dir() -> PathBuf {
     let data_dir = get_data_dir();
     data_dir.join("assets")
 }
+
+pub fn get_libs_dir() -> PathBuf {
+    let data_dir = get_data_dir();
+    data_dir.join("libraries")
+}

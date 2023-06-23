@@ -1,7 +1,7 @@
 mod env;
 mod json;
 
-use env::get_assets_dir;
+use env::{get_assets_dir, get_libs_dir};
 use json::{VersionManifest, VersionManifestEntry, GameManifest, AssetDownload, AssetManifest};
 
 use std::{fs::create_dir_all, fs::File, io::copy};
@@ -91,6 +91,15 @@ pub async fn create_instance(dir: &str, mc_version: &str, progress: &mut dyn Pro
         current += 1;
     }
 
+    let client = game_manifest.downloads.get("client")
+        .ok_or(Error::new("Missing 'client' key in downloads object"))?;
+
+    let ver = game_manifest.id;
+    download_library(
+        format!("com/mojang/minecraft/{ver}/minecraft-{ver}-client.jar").as_str(),
+        client
+    ).await?;
+
     Ok(())
 }
 
@@ -122,6 +131,26 @@ async fn download_asset(hash: &str) -> Result<(), Box<dyn StdError>> {
         .bytes_stream();
 
     let mut file = File::create(object_file)?;
+
+    while let Some(item) = stream.next().await {
+        copy(&mut item?.as_ref(), &mut file)?;
+    }
+
+    Ok(())
+}
+
+async fn download_library(path: &str, download: &AssetDownload) -> Result<(), Box<dyn StdError>> {
+    let libs_dir = get_libs_dir();
+
+    let lib_file = libs_dir.join(path);
+    create_dir_all(lib_file.parent().unwrap())?;
+
+    let mut stream = reqwest::get(&download.url)
+        .await?
+        .error_for_status()?
+        .bytes_stream();
+
+    let mut file = File::create(lib_file)?;
 
     while let Some(item) = stream.next().await {
         copy(&mut item?.as_ref(), &mut file)?;
