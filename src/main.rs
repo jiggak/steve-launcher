@@ -1,7 +1,7 @@
 mod cli;
 
 use cli::{Parser, Cli, Commands};
-use indicatif::ProgressBar;
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use mcli::{create_instance, Progress};
 
 #[tokio::main(flavor = "current_thread")]
@@ -17,23 +17,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 struct ProgressHandler {
-    progress: Option<ProgressBar>
+    progress: ProgressBar
 }
 
 impl ProgressHandler {
     fn new() -> Self {
         ProgressHandler {
-            progress: None
+            progress: ProgressBar::with_draw_target(None, ProgressDrawTarget::stdout())
+                .with_style(ProgressStyle::with_template("{bar:40.cyan/blue} {msg}").unwrap())
         }
     }
 }
 
 impl Progress for ProgressHandler {
     fn advance(&mut self, current: usize) {
-        self.progress.as_ref().unwrap().set_position(current as u64);
+        self.progress.set_position(current as u64);
     }
 
-    fn begin(&mut self, total: usize) {
-        self.progress = Some(ProgressBar::new(total as u64));
+    fn begin(&mut self, message: &'static str, total: usize) {
+        self.progress.set_length(total as u64);
+        self.progress.set_message(message);
+        self.progress.reset();
+    }
+
+    fn end(&mut self) {
+        self.progress.finish_and_clear();
     }
 }
