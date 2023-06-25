@@ -14,11 +14,13 @@ pub fn get_data_dir() -> PathBuf {
 }
 
 pub fn get_assets_dir() -> PathBuf {
-    let data_dir = get_data_dir();
-    data_dir.join("assets")
+    get_data_dir().join("assets")
 }
 
 pub fn get_libs_dir() -> PathBuf {
-    let data_dir = get_data_dir();
-    data_dir.join("libraries")
+    get_data_dir().join("libraries")
+}
+
+pub fn get_cache_dir() -> PathBuf {
+    get_data_dir().join("cache")
 }

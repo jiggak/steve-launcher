@@ -2,7 +2,7 @@ mod cli;
 
 use cli::{Parser, Cli, Commands};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
-use mcli::{create_instance, Progress};
+use mcli::{create_instance, launch_instance, Progress};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -10,8 +10,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match cli.command {
         Commands::Create { dir, mc_version } => {
+            let instance_dir = match dir.is_absolute() {
+                false => std::env::current_dir()?.join(dir),
+                true => dir
+            };
+
+            create_instance(&instance_dir, &mc_version).await
+        },
+        Commands::Launch { dir } => {
             let mut handler = ProgressHandler::new();
-            create_instance(&dir, &mc_version, &mut handler).await
+            launch_instance(&dir, &mut handler).await
         }
     }
 }
