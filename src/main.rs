@@ -2,7 +2,7 @@ mod cli;
 
 use cli::{Parser, Cli, Commands};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
-use mcli::{create_instance, launch_instance, Progress};
+use mcli::commands::{Progress, create_instance, launch_instance};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

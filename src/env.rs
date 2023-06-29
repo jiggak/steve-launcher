@@ -2,9 +2,15 @@ use std::env;
 use std::path::PathBuf;
 
 pub fn get_data_dir() -> PathBuf {
+    // get base data directory from XDG_DATA_HOME, or ~/.local/share
     let base_data_dir = match env::var("XDG_DATA_HOME") {
         Ok(var) => PathBuf::from(var),
-        Err(_) => env::home_dir().unwrap().join(".local").join("share")
+        Err(_) => {
+            let home_dir = env::var("HOME")
+                .expect("HOME env var not found");
+
+            PathBuf::from(home_dir).join(".local").join("share")
+        }
     };
 
     let pkg_name = env::var("CARGO_PKG_NAME")

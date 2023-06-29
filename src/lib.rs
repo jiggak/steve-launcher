@@ -1,15 +1,17 @@
 mod env;
 mod json;
 mod rules;
+pub mod commands;
 
 use futures_util::StreamExt;
-use std::{fs, io, fs::File, path::Path, process::Command, collections::HashMap};
+use std::{fs, io, fs::File, path::Path};
 use std::error::Error as StdError;
 
+use commands::Progress;
 use env::{get_assets_dir, get_libs_dir, get_cache_dir};
 use json::{
     VersionManifest, GameManifest, GameLibraryDownloads,
-    AssetDownload, AssetManifest, InstanceManifest, GameArgValue
+    AssetDownload, AssetManifest
 };
 use rules::RulesMatch;
 
@@ -36,12 +38,6 @@ impl std::fmt::Display for Error {
     }
 }
 
-pub trait Progress {
-    fn begin(&mut self, message: &'static str, total: usize);
-    fn end(&mut self);
-    fn advance(&mut self, current: usize);
-}
-
 pub async fn get_game_manifest(mc_version: &str) -> Result<GameManifest, Box<dyn StdError>> {
     let versions_dir = get_cache_dir().join("versions");
 
@@ -65,118 +61,6 @@ pub async fn get_game_manifest(mc_version: &str) -> Result<GameManifest, Box<dyn
     let game_manifest: GameManifest = serde_json::from_reader(version_file)?;
 
     Ok(game_manifest)
-}
-
-pub async fn create_instance(instance_dir: &Path, mc_version: &str) -> Result<(), Box<dyn StdError>> {
-    // hydrate game manifest cache and validate `mc_version`
-    get_game_manifest(mc_version)
-        .await?;
-
-    fs::create_dir(instance_dir)?;
-
-    let instance_manifest_path = instance_dir.join("manifest.json");
-
-    let instance_manifest = InstanceManifest {
-        mc_version: mc_version.to_string(),
-        game_dir: "minecraft".to_string(),
-        java_path: None
-    };
-
-    let instance_manifest_json = serde_json::to_string_pretty(&instance_manifest)?;
-    fs::write(instance_manifest_path, instance_manifest_json)?;
-
-    Ok(())
-}
-
-pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -> Result<(), Box<dyn StdError>> {
-    let instance_manifest = get_instance_manifest(instance_dir)?;
-    let instance_game_dir = fs::canonicalize(instance_dir.join(instance_manifest.game_dir))?;
-    let game_manifest = get_game_manifest(&instance_manifest.mc_version)
-        .await?;
-
-    download_game_files(&game_manifest, progress)
-        .await?;
-
-    let mut cmd = Command::new("java");
-    let mut cmd_args: Vec<String> = vec![];
-
-    if let Some(args) = game_manifest.arguments {
-        for arg in args.jvm.0 {
-            if !arg.rules.matches() {
-                continue;
-            }
-
-            match arg.value {
-                GameArgValue::Single(v) => cmd_args.push(v),
-                GameArgValue::Many(v) => cmd_args.extend(v)
-            };
-        }
-
-        cmd_args.push(game_manifest.main_class);
-
-        for arg in args.game.0 {
-            if !arg.rules.matches() {
-                continue;
-            }
-
-            match arg.value {
-                GameArgValue::Single(v) => cmd_args.push(v),
-                GameArgValue::Many(v) => cmd_args.extend(v)
-            };
-        }
-    } else if let Some(args) = game_manifest.minecraft_arguments {
-        cmd_args.extend(args.split(' ').map(|v| v.to_string()));
-    }
-
-    let mut libs = vec![
-        get_client_jar_path(&game_manifest.id)
-    ];
-
-    libs.extend(
-        game_manifest.libraries.iter().filter_map(|lib| {
-            if let Some(rules) = &lib.rules {
-                if !rules.matches() {
-                    return None;
-                }
-            }
-
-            match &lib.downloads {
-                GameLibraryDownloads::Artifact(x) =>
-                    Some(x.artifact.path.clone()),
-                GameLibraryDownloads::Classifiers(_) => {
-                    // FIXME handle lib with classifiers
-                    None
-                }
-            }
-        })
-    );
-
-    let classpath = std::env::join_paths(
-        libs.iter().map(|p| get_libs_dir().join(p))
-    )?.into_string().unwrap();
-
-    let ctx = HashMap::from([
-        ("version_name".into(), instance_manifest.mc_version),
-        ("version_type".into(), game_manifest.release_type),
-        ("game_directory".into(), instance_game_dir.to_str().unwrap().into()),
-        ("assets_root".into(), get_assets_dir().to_str().unwrap().into()),
-        ("assets_index_name".into(), "5".into()),
-        ("classpath".into(), classpath)
-    ]);
-
-    for arg in cmd_args {
-        cmd.arg(envsubst::substitute(arg, &ctx)?);
-    }
-
-    cmd.spawn()?;
-
-    Ok(())
-}
-
-fn get_instance_manifest(instance_dir: &Path) -> Result<InstanceManifest, Box<dyn StdError>> {
-    let instance_manifest_path = instance_dir.join("manifest.json");
-    let json = fs::read_to_string(instance_manifest_path)?;
-    Ok(serde_json::from_str::<InstanceManifest>(json.as_str())?)
 }
 
 fn get_client_jar_path(mc_version: &str) -> String {
