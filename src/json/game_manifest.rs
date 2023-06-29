@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 #[derive(Deserialize)]
 pub struct GameManifest {
-    pub arguments: Option<HashMap<String, GameArgs>>,
+    pub arguments: Option<GameArgsIndex>,
     #[serde(rename(deserialize = "assetIndex"))]
     pub asset_index: GameAssetIndex,
     pub assets: String,
@@ -17,6 +17,8 @@ pub struct GameManifest {
     pub logging: GameLogging,
     #[serde(rename(deserialize = "mainClass"))]
     pub main_class: String,
+    #[serde(rename(deserialize = "minecraftArguments"))]
+    pub minecraft_arguments: Option<String>,
     #[serde(rename(deserialize = "minimumLauncherVersion"))]
     pub minimum_launcher_version: u8,
     #[serde(rename(deserialize = "releaseTime"))]
@@ -24,6 +26,12 @@ pub struct GameManifest {
     pub time: String,
     #[serde(rename(deserialize = "type"))]
     pub release_type: String
+}
+
+#[derive(Deserialize)]
+pub struct GameArgsIndex {
+    pub game: GameArgs,
+    pub jvm: GameArgs
 }
 
 #[derive(Deserialize)]

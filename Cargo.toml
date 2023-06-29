@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.3.4", features = ["derive"] }
+envsubst = "0.2.1"
 futures-util = "0.3.28"
 indicatif = "0.17.5"
 reqwest = { version = "0.11.18", features = ["json", "stream"] }

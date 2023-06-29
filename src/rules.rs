@@ -1,20 +1,43 @@
 use std::env::consts;
-use crate::json::{GameLibraryRule, OsProperties};
+use crate::json::{GameLibraryRule, OsProperties, GameArgRule};
 
-pub fn match_rules(rules: &Vec<GameLibraryRule>) -> bool {
-    _match_rules(
-        rules,
-        match consts::OS {
-            // json uses "osx" instead of "macos" for os name
-            "macos" => "osx",
-            os => os
-        },
-        "1.0", // FIXME add OS version
-        consts::ARCH
-    )
+pub trait RulesMatch {
+    fn matches(&self) -> bool;
 }
 
-fn _match_rules(rules: &Vec<GameLibraryRule>, host_os: &str, host_version: &str, host_arch: &str) -> bool {
+impl RulesMatch for Vec<GameLibraryRule> {
+    fn matches(&self) -> bool {
+        _match_lib_rules(self, &RulesContext::new())
+    }
+}
+
+impl RulesMatch for Vec<GameArgRule> {
+    fn matches(&self) -> bool {
+        _match_arg_rules(self, &RulesContext::new())
+    }
+}
+
+struct RulesContext {
+    host_os: &'static str,
+    host_version: &'static str,
+    host_arch: &'static str
+}
+
+impl RulesContext {
+    fn new() -> Self {
+        RulesContext {
+            host_os: match consts::OS {
+                // json uses "osx" instead of "macos" for os name
+                "macos" => "osx",
+                os => os
+            },
+            host_version: "1.0", // FIXME add OS version
+            host_arch: consts::ARCH
+        }
+    }
+}
+
+fn _match_lib_rules(rules: &Vec<GameLibraryRule>, ctx: &RulesContext) -> bool {
     let mut result = false;
 
     for rule in rules {
@@ -24,13 +47,13 @@ fn _match_rules(rules: &Vec<GameLibraryRule>, host_os: &str, host_version: &str,
             // when allow block has OS properties match and return now
             // based on inspecting data, this appears to be desired
             if let Some(os) = &rule.os {
-                return _match_os_properties(&os, host_os, host_version, host_arch);
+                return _match_os_properties(&os, ctx);
             }
         }
 
         if rule.action == "disallow" {
             if let Some(os) = &rule.os {
-                if _match_os_properties(&os, host_os, host_version, host_arch) {
+                if _match_os_properties(&os, ctx) {
                     return false;
                 }
             }
@@ -40,16 +63,34 @@ fn _match_rules(rules: &Vec<GameLibraryRule>, host_os: &str, host_version: &str,
     result
 }
 
-fn _match_os_properties(os: &OsProperties, host_os: &str, host_version: &str, host_arch: &str) -> bool {
-    os.name.as_ref().map_or(true, |v| v == host_os) &&
-    // is it worth it to add os_info and regex crates just for this?
+fn _match_arg_rules(rules: &Vec<GameArgRule>, ctx: &RulesContext) -> bool {
+    for rule in rules {
+        if rule.action == "allow" {
+            if let Some(_features) = &rule.features {
+                // FIXME not implemented
+                return false;
+            }
+
+            if let Some(os) = &rule.os {
+                return _match_os_properties(os, ctx);
+            }
+        }
+    }
+
+    // rules "match" when rules list is empty
+    true
+}
+
+fn _match_os_properties(os: &OsProperties, ctx: &RulesContext) -> bool {
+    os.name.as_ref().map_or(true, |v| v == ctx.host_os) &&
+    // FIXME is it worth it to add os_info and regex crates just for this?
     // os.version.as_ref().map_or(true, |v| v == ) &&
-    os.arch.as_ref().map_or(true, |v| v == host_arch)
+    os.arch.as_ref().map_or(true, |v| v == ctx.host_arch)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::_match_rules;
+    use super::{_match_lib_rules, RulesContext};
     use crate::json::{GameLibraryRule, OsProperties};
 
     #[test]
@@ -63,8 +104,13 @@ mod tests {
                 })
             }
         ];
+        let ctx = RulesContext {
+            host_os: "linux",
+            host_version: "",
+            host_arch: "x86_64"
+        };
 
-        assert_eq!(_match_rules(&rules, "linux", "", "x86_64"), true);
+        assert_eq!(_match_lib_rules(&rules, &ctx), true);
     }
 
     #[test]
@@ -78,8 +124,13 @@ mod tests {
                 })
             }
         ];
+        let ctx = RulesContext {
+            host_os: "windows",
+            host_version: "",
+            host_arch: "x86_64"
+        };
 
-        assert_eq!(_match_rules(&rules, "windows", "", "x86_64"), false);
+        assert_eq!(_match_lib_rules(&rules, &ctx), false);
     }
 
     #[test]
@@ -97,8 +148,13 @@ mod tests {
                 })
             }
         ];
+        let ctx = RulesContext {
+            host_os: "linux",
+            host_version: "",
+            host_arch: "x86_64"
+        };
 
-        assert_eq!(_match_rules(&rules, "linux", "", "x86_64"), true);
+        assert_eq!(_match_lib_rules(&rules, &ctx), true);
     }
 
     #[test]
@@ -116,7 +172,12 @@ mod tests {
                 })
             }
         ];
+        let ctx = RulesContext {
+            host_os: "osx",
+            host_version: "",
+            host_arch: "x86_64"
+        };
 
-        assert_eq!(_match_rules(&rules, "osx", "", "x86_64"), false);
+        assert_eq!(_match_lib_rules(&rules, &ctx), false);
     }
 }
