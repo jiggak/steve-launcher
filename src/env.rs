@@ -30,3 +30,11 @@ pub fn get_libs_dir() -> PathBuf {
 pub fn get_cache_dir() -> PathBuf {
     get_data_dir().join("cache")
 }
+
+pub fn get_host_os() -> &'static str {
+    match env::consts::OS {
+        // mojang json files uses "osx" instead of "macos" for os name
+        "macos" => "osx",
+        os => os
+    }
+}

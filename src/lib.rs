@@ -8,10 +8,10 @@ use std::{fs, io, fs::File, path::Path};
 use std::error::Error as StdError;
 
 use commands::Progress;
-use env::{get_assets_dir, get_libs_dir, get_cache_dir};
+use env::{get_assets_dir, get_cache_dir, get_host_os, get_libs_dir};
 use json::{
-    VersionManifest, GameManifest, GameLibraryDownloads,
-    AssetDownload, AssetManifest
+    AssetDownload, AssetManifest, GameLibrary, GameLibraryArtifact, GameManifest,
+    VersionManifest
 };
 use rules::RulesMatch;
 
@@ -103,21 +103,8 @@ async fn download_game_files(game_manifest: &GameManifest, progress: &mut dyn Pr
     ];
 
     lib_downloads.extend(
-        game_manifest.libraries.iter().filter_map(|lib| {
-            if let Some(rules) = &lib.rules {
-                if !rules.matches() {
-                    return None;
-                }
-            }
-
-            match &lib.downloads {
-                GameLibraryDownloads::Artifact(x) =>
-                    Some((x.artifact.path.as_str(), &x.artifact.download)),
-                GameLibraryDownloads::Classifiers(_) => {
-                    // FIXME handle lib with classifiers
-                    None
-                }
-            }
+        get_matched_artifacts(&game_manifest.libraries).map(|a| {
+            (a.path.as_str(), &a.download)
         })
     );
 
@@ -204,4 +191,47 @@ async fn download_library(path: &str, download: &AssetDownload) -> Result<(), Bo
     fs::create_dir_all(lib_file.parent().unwrap())?;
 
     download_file(&download.url, &lib_file).await
+}
+
+pub fn get_matched_artifacts(libs: &Vec<GameLibrary>) -> impl Iterator<Item = &GameLibraryArtifact> {
+    libs.iter().filter_map(|lib| {
+        if let Some(rules) = &lib.rules {
+            if !rules.matches() {
+                return None;
+            }
+        }
+
+        if let Some(artifact) = &lib.downloads.artifact {
+            return Some(artifact);
+        }
+
+        if let Some(natives) = &lib.natives {
+            let natives_key = natives.get(get_host_os())
+                .expect(format!("os name '{}' not found in lib {} natives", get_host_os(), lib.name).as_str());
+
+            if let Some(classifiers) = &lib.downloads.classifiers {
+                let artifact = classifiers.get(natives_key)
+                    .expect(format!("expected key '{}' in lib {} classifiers", natives_key, lib.name).as_str());
+
+                return Some(artifact);
+            } else {
+                panic!("expected 'classifiers' in lib {}", lib.name);
+            }
+        }
+
+        panic!("unhandled download for {}", lib.name);
+    })
+}
+
+impl json::GameArgs {
+    pub fn matched_args(&self) -> impl Iterator<Item = String> + '_ {
+        self.0.iter()
+            .filter(|arg| arg.rules.matches())
+            .flat_map(|arg| {
+                match &arg.value {
+                    json::GameArgValue::Single(v) => vec![v.clone()],
+                    json::GameArgValue::Many(v) => v.to_vec()
+                }
+            })
+    }
 }

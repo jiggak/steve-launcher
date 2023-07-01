@@ -1,10 +1,9 @@
 use std::error::Error as StdError;
 use std::{path::Path, process::Command, collections::HashMap};
 
-use crate::{download_game_files, get_client_jar_path, get_game_manifest, RulesMatch};
+use crate::{download_game_files, get_client_jar_path, get_game_manifest, get_matched_artifacts};
 use super::{instance::Instance, Progress};
 use crate::env::{get_assets_dir, get_libs_dir};
-use crate::json::{GameLibraryDownloads};
 
 pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -> Result<(), Box<dyn StdError>> {
     let instance = Instance::load(&instance_dir)?;
@@ -33,22 +32,8 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
     ];
 
     libs.extend(
-        game_manifest.libraries.iter().filter_map(|lib| {
-            if let Some(rules) = &lib.rules {
-                if !rules.matches() {
-                    return None;
-                }
-            }
-
-            match &lib.downloads {
-                GameLibraryDownloads::Artifact(x) =>
-                    Some(x.artifact.path.clone()),
-                GameLibraryDownloads::Classifiers(_) => {
-                    // FIXME handle lib with classifiers
-                    None
-                }
-            }
-        })
+        get_matched_artifacts(&game_manifest.libraries)
+            .map(|a| a.path.clone())
     );
 
     let classpath = std::env::join_paths(

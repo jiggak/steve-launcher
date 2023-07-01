@@ -1,4 +1,3 @@
-use std::env::consts;
 use crate::json::{GameLibraryRule, OsProperties, GameArgRule};
 
 pub trait RulesMatch {
@@ -26,13 +25,9 @@ struct RulesContext {
 impl RulesContext {
     fn new() -> Self {
         RulesContext {
-            host_os: match consts::OS {
-                // json uses "osx" instead of "macos" for os name
-                "macos" => "osx",
-                os => os
-            },
+            host_os: crate::env::get_host_os(),
             host_version: "1.0", // FIXME add OS version
-            host_arch: consts::ARCH
+            host_arch: std::env::consts::ARCH
         }
     }
 }
