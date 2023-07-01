@@ -4,7 +4,7 @@ use std::{path::Path, process::Command, collections::HashMap};
 use crate::{download_game_files, get_client_jar_path, get_game_manifest, RulesMatch};
 use super::{instance::Instance, Progress};
 use crate::env::{get_assets_dir, get_libs_dir};
-use crate::json::{GameArgValue, GameLibraryDownloads};
+use crate::json::{GameLibraryDownloads};
 
 pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -> Result<(), Box<dyn StdError>> {
     let instance = Instance::load(&instance_dir)?;
@@ -19,29 +19,11 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
     let mut cmd_args: Vec<String> = vec![];
 
     if let Some(args) = game_manifest.arguments {
-        for arg in args.jvm.0 {
-            if !arg.rules.matches() {
-                continue;
-            }
-
-            match arg.value {
-                GameArgValue::Single(v) => cmd_args.push(v),
-                GameArgValue::Many(v) => cmd_args.extend(v)
-            };
-        }
+        cmd_args.extend(args.jvm.matched_args());
 
         cmd_args.push(game_manifest.main_class);
 
-        for arg in args.game.0 {
-            if !arg.rules.matches() {
-                continue;
-            }
-
-            match arg.value {
-                GameArgValue::Single(v) => cmd_args.push(v),
-                GameArgValue::Many(v) => cmd_args.extend(v)
-            };
-        }
+        cmd_args.extend(args.game.matched_args());
     } else if let Some(args) = game_manifest.minecraft_arguments {
         cmd_args.extend(args.split(' ').map(|v| v.to_string()));
     }

@@ -1,6 +1,8 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 
+use crate::rules::RulesMatch;
+
 #[derive(Deserialize)]
 pub struct GameManifest {
     pub arguments: Option<GameArgsIndex>,
@@ -37,6 +39,19 @@ pub struct GameArgsIndex {
 #[derive(Deserialize)]
 #[serde(from = "GameArgsRaw")]
 pub struct GameArgs(pub Vec<GameArg>);
+
+impl GameArgs {
+    pub fn matched_args(&self) -> impl Iterator<Item = String> + '_ {
+        self.0.iter()
+            .filter(|arg| arg.rules.matches())
+            .flat_map(|arg| {
+                match &arg.value {
+                    GameArgValue::Single(v) => vec![v.clone()],
+                    GameArgValue::Many(v) => v.to_vec()
+                }
+            })
+    }
+}
 
 #[derive(Deserialize)]
 struct GameArgsRaw(Vec<GameArgTypes>);
