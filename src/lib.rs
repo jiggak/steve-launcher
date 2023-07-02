@@ -194,33 +194,35 @@ async fn download_library(path: &str, download: &AssetDownload) -> Result<(), Bo
 }
 
 pub fn get_matched_artifacts(libs: &Vec<GameLibrary>) -> impl Iterator<Item = &GameLibraryArtifact> {
-    libs.iter().filter_map(|lib| {
-        if let Some(rules) = &lib.rules {
-            if !rules.matches() {
-                return None;
+    libs.iter()
+        .filter(|lib| lib.rules.is_none() || lib.rules.as_ref().unwrap().matches())
+        .flat_map(|lib| {
+            let mut result = vec![];
+
+            if let Some(artifact) = &lib.downloads.artifact {
+                result.push(artifact);
             }
-        }
 
-        if let Some(artifact) = &lib.downloads.artifact {
-            return Some(artifact);
-        }
+            if let Some(natives) = &lib.natives {
+                let natives_key = natives.get(get_host_os())
+                    .expect(format!("os name '{}' not found in lib {} natives", get_host_os(), lib.name).as_str());
 
-        if let Some(natives) = &lib.natives {
-            let natives_key = natives.get(get_host_os())
-                .expect(format!("os name '{}' not found in lib {} natives", get_host_os(), lib.name).as_str());
+                if let Some(classifiers) = &lib.downloads.classifiers {
+                    let artifact = classifiers.get(natives_key)
+                        .expect(format!("expected key '{}' in lib {} classifiers", natives_key, lib.name).as_str());
 
-            if let Some(classifiers) = &lib.downloads.classifiers {
-                let artifact = classifiers.get(natives_key)
-                    .expect(format!("expected key '{}' in lib {} classifiers", natives_key, lib.name).as_str());
-
-                return Some(artifact);
-            } else {
-                panic!("expected 'classifiers' in lib {}", lib.name);
+                    result.push(artifact);
+                } else {
+                    panic!("expected 'classifiers' in lib {}", lib.name);
+                }
             }
-        }
 
-        panic!("unhandled download for {}", lib.name);
-    })
+            if result.is_empty() {
+                panic!("unhandled download for {}", lib.name);
+            }
+
+            return result;
+        })
 }
 
 impl json::GameArgs {
