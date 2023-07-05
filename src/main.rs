@@ -2,7 +2,7 @@ mod cli;
 
 use cli::{Parser, Cli, Commands};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
-use mcli::commands::{Progress, create_instance, launch_instance};
+use mcli::commands::{Progress, create_instance, launch_instance, login};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -20,6 +20,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Launch { dir } => {
             let mut handler = ProgressHandler::new();
             launch_instance(&dir, &mut handler).await
+        },
+        Commands::Auth => {
+            login(|url, code| {
+                println!("Open the URL in your browser and enter the code: {code}\n\t{url}");
+            }).await
         }
     }
 }
@@ -32,7 +37,7 @@ impl ProgressHandler {
     fn new() -> Self {
         ProgressHandler {
             progress: ProgressBar::with_draw_target(None, ProgressDrawTarget::stdout())
-                .with_style(ProgressStyle::with_template("{bar:40.cyan/blue} {msg}").unwrap())
+                .with_style(ProgressStyle::with_template("{bar:40.cyan/blue} {msg} {pos}/{len}").unwrap())
         }
     }
 }

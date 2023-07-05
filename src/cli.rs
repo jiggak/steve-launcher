@@ -23,5 +23,7 @@ pub enum Commands {
     Launch {
         /// Path to directory of instance
         dir: PathBuf
-    }
+    },
+
+    Auth
 }

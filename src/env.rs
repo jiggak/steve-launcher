@@ -13,10 +13,7 @@ pub fn get_data_dir() -> PathBuf {
         }
     };
 
-    let pkg_name = env::var("CARGO_PKG_NAME")
-        .expect("CARGO_PKG_NAME env var not found");
-
-    base_data_dir.join(pkg_name)
+    base_data_dir.join(get_package_name())
 }
 
 pub fn get_assets_dir() -> PathBuf {
@@ -37,4 +34,19 @@ pub fn get_host_os() -> &'static str {
         "macos" => "osx",
         os => os
     }
+}
+
+pub fn get_package_name() -> String {
+    env::var("CARGO_PKG_NAME")
+        .expect("CARGO_PKG_NAME env var not found")
+}
+
+pub fn get_package_version() -> String {
+    env::var("CARGO_PKG_VERSION")
+        .expect("CARGO_PKG_VERSION env var not found")
+}
+
+pub fn get_azure_client_id() -> String {
+    env::var("AZURE_CLIENT_ID")
+        .expect("AZURE_CLIENT_ID env var not found")
 }
