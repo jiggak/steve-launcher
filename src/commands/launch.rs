@@ -1,7 +1,8 @@
 use std::error::Error as StdError;
 use std::{path::Path, process::Command, collections::HashMap};
 
-use crate::{download_game_files, get_client_jar_path, get_game_manifest, get_matched_artifacts};
+use crate::downloader::Downloader;
+use crate::{get_client_jar_path, get_game_manifest, get_matched_artifacts};
 use super::{account::Account, instance::Instance, Progress};
 use crate::env::{get_assets_dir, get_libs_dir, get_package_name, get_package_version, get_msa_client_id};
 
@@ -11,11 +12,11 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
 
     let profile = account.fetch_profile().await?;
 
-    let game_manifest = get_game_manifest(&instance.manifest.mc_version)
-        .await?;
+    let downloader = Downloader::new();
 
-    download_game_files(&game_manifest, progress)
-        .await?;
+    let game_manifest = get_game_manifest(&instance.manifest.mc_version).await?;
+
+    downloader.download_game_files(&game_manifest, progress).await?;
 
     let mut cmd = Command::new("java");
 
