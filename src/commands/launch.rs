@@ -3,11 +3,13 @@ use std::{path::Path, process::Command, collections::HashMap};
 
 use crate::{download_game_files, get_client_jar_path, get_game_manifest, get_matched_artifacts};
 use super::{account::Account, instance::Instance, Progress};
-use crate::env::{get_assets_dir, get_libs_dir, get_package_name, get_package_version, get_azure_client_id};
+use crate::env::{get_assets_dir, get_libs_dir, get_package_name, get_package_version, get_msa_client_id};
 
 pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -> Result<(), Box<dyn StdError>> {
     let instance = Instance::load(&instance_dir)?;
     let account = Account::load_with_tokens().await?;
+
+    let profile = account.fetch_profile().await?;
 
     let game_manifest = get_game_manifest(&instance.manifest.mc_version)
         .await?;
@@ -16,6 +18,10 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
         .await?;
 
     let mut cmd = Command::new("java");
+
+    // set current directory for log output
+    cmd.current_dir(instance.game_dir());
+
     let mut cmd_args: Vec<String> = vec![];
 
     if let Some(args) = game_manifest.arguments {
@@ -50,13 +56,13 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
         ("assets_root".into(), get_assets_dir().to_str().unwrap().into()),
         ("assets_index_name".into(), game_manifest.asset_index.id),
         ("classpath".into(), classpath),
-        ("natives_directory".into(), "".into()),
+        // FIXME what should this be? empty value causes various errors
+        ("natives_directory".into(), "/tmp".into()),
         ("user_type".into(), "msa".into()),
-        ("clientid".into(), get_azure_client_id()),
+        ("clientid".into(), get_msa_client_id()),
         ("auth_access_token".into(), account.access_token().into()),
-        // TODO fill these in from profile
-        // ("auth_player_name".into(), player_name),
-        // ("auth_uuid".into(), profile_id),
+        ("auth_player_name".into(), profile.name),
+        ("auth_uuid".into(), profile.id),
         ("launcher_name".into(), get_package_name()),
         ("launcher_version".into(), get_package_version())
     ]);

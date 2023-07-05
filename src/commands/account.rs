@@ -1,3 +1,7 @@
+/**
+ * Most of the token code comes from https://github.com/KernelFreeze/minecraft-msa-auth
+ */
+
 use chrono::{Duration, OutOfRangeError, Utc};
 use reqwest::Client;
 use serde::{Deserialize};
@@ -9,8 +13,8 @@ use oauth2::{
     basic::BasicClient, basic::BasicTokenType, reqwest::async_http_client
 };
 
-use crate::env::{get_data_dir, get_azure_client_id};
-use crate::json::{AccountManifest, MicrosoftToken, MinecraftToken};
+use crate::env::{get_data_dir, get_msa_client_id};
+use crate::json::{AccountManifest, MicrosoftToken, MinecraftToken, MinecraftProfile};
 
 const MANIFEST_FILE: &str = "account.json";
 
@@ -72,7 +76,11 @@ impl Account {
     }
 
     pub fn access_token(&self) -> &String {
-        &self.manifest.msa_token.access_token
+        &self.manifest.mc_token.access_token
+    }
+
+    pub async fn fetch_profile(&self) -> Result<MinecraftProfile, Box<dyn StdError>> {
+        get_profile(&self.manifest.mc_token.access_token).await
     }
 }
 
@@ -102,7 +110,7 @@ fn oauth_client() -> Result<BasicClient, Box<dyn StdError>> {
     )?;
 
     Ok(BasicClient::new(
-        ClientId::new(get_azure_client_id().to_string()),
+        ClientId::new(get_msa_client_id().to_string()),
         None,
         auth_url,
         Some(token_url)
@@ -144,14 +152,14 @@ async fn refresh_token(refresh_token: &str) -> Result<MicrosoftToken, Box<dyn St
     Ok(MicrosoftToken::from_token_response(msa_token_result)?)
 }
 
-async fn login_token(msa_access_toke: &str) -> Result<MinecraftToken, Box<dyn StdError>> {
+async fn login_token(msa_access_token: &str) -> Result<MinecraftToken, Box<dyn StdError>> {
     let client = Client::new();
 
     let xbox_authenticate_json = json!({
         "Properties": {
             "AuthMethod": "RPS",
             "SiteName": "user.auth.xboxlive.com",
-            "RpsTicket": &format!("d={}", msa_access_toke)
+            "RpsTicket": &format!("d={}", msa_access_token)
         },
         "RelyingParty": "http://auth.xboxlive.com",
         "TokenType": "JWT"
@@ -160,11 +168,9 @@ async fn login_token(msa_access_toke: &str) -> Result<MinecraftToken, Box<dyn St
     let xbox_authenticate_response: XboxAuthResponse = client
         .post("https://user.auth.xboxlive.com/user/authenticate")
         .json(&xbox_authenticate_json)
-        .send()
-        .await?
+        .send().await?
         .error_for_status()?
-        .json()
-        .await?;
+        .json().await?;
 
     let xbox_authorize_json = json!({
         "Properties": {
@@ -178,11 +184,9 @@ async fn login_token(msa_access_toke: &str) -> Result<MinecraftToken, Box<dyn St
     let xbox_authorize_response: XboxAuthResponse = client
         .post("https://xsts.auth.xboxlive.com/xsts/authorize")
         .json(&xbox_authorize_json)
-        .send()
-        .await?
+        .send().await?
         .error_for_status()?
-        .json()
-        .await?;
+        .json().await?;
 
     let hash = &xbox_authenticate_response.display_claims["xui"][0]["uhs"];
     let token = xbox_authorize_response.token;
@@ -194,16 +198,24 @@ async fn login_token(msa_access_toke: &str) -> Result<MinecraftToken, Box<dyn St
     let mc_login_response: MinecraftAuthResponse = client
         .post("https://api.minecraftservices.com/authentication/login_with_xbox")
         .json(&mc_login_json)
-        .send()
-        .await?
+        .send().await?
         .error_for_status()?
-        .json()
-        .await?;
+        .json().await?;
 
     Ok(MinecraftToken {
         access_token: mc_login_response.access_token,
         expires: Utc::now() + Duration::seconds(mc_login_response.expires_in.into())
     })
+}
+
+async fn get_profile(mc_access_token: &str) -> Result<MinecraftProfile, Box<dyn StdError>> {
+    let client = Client::new();
+
+    Ok(client
+        .get("https://api.minecraftservices.com/minecraft/profile")
+        .bearer_auth(mc_access_token)
+        .send().await?
+        .json::<MinecraftProfile>().await?)
 }
 
 #[derive(Deserialize)]

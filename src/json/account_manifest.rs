@@ -33,3 +33,39 @@ impl MinecraftToken {
         Utc::now() > self.expires
     }
 }
+
+#[derive(Deserialize, Serialize)]
+pub struct MinecraftProfile {
+    pub id: String,
+
+    pub name: String,
+
+    pub skins: Vec<MinecraftSkin>,
+
+    pub capes: Vec<MinecraftCape>
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct MinecraftSkin {
+    pub id: String,
+
+    pub state: String,
+
+    pub url: String,
+
+    #[serde(rename(deserialize = "textureKey"))]
+    pub texture_key: String,
+
+    pub variant: String
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct MinecraftCape {
+    pub id: String,
+
+    pub state: String,
+
+    pub url: String,
+
+    pub alias: String
+}
