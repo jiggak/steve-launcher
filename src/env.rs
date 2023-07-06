@@ -36,17 +36,15 @@ pub fn get_host_os() -> &'static str {
     }
 }
 
-pub fn get_package_name() -> String {
-    env::var("CARGO_PKG_NAME")
-        .expect("CARGO_PKG_NAME env var not found")
+pub fn get_package_name() -> &'static str {
+    env!("CARGO_PKG_NAME")
 }
 
-pub fn get_package_version() -> String {
-    env::var("CARGO_PKG_VERSION")
-        .expect("CARGO_PKG_VERSION env var not found")
+pub fn get_package_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
 }
 
-pub fn get_azure_client_id() -> String {
-    env::var("AZURE_CLIENT_ID")
-        .expect("AZURE_CLIENT_ID env var not found")
+pub fn get_msa_client_id() -> String {
+    env::var("MSA_CLIENT_ID")
+        .expect("MSA_CLIENT_ID env var not found")
 }

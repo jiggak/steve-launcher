@@ -14,7 +14,7 @@ pub struct GameManifest {
     #[serde(rename(deserialize = "javaVersion"))]
     pub java_version: GameJavaVersion,
     pub libraries: Vec<GameLibrary>,
-    pub logging: GameLogging,
+    pub logging: Option<GameLogging>,
     #[serde(rename(deserialize = "mainClass"))]
     pub main_class: String,
     #[serde(rename(deserialize = "minecraftArguments"))]

@@ -18,7 +18,10 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
 
     downloader.download_game_files(&game_manifest, progress).await?;
 
-    let mut cmd = Command::new("java");
+    let mut cmd = Command::new(match &instance.manifest.java_path {
+        Some(path) => path,
+        _ => "java"
+    });
 
     // set current directory for log output
     cmd.current_dir(instance.game_dir());
@@ -27,11 +30,11 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
 
     if let Some(args) = game_manifest.arguments {
         cmd_args.extend(args.jvm.matched_args());
-
         cmd_args.push(game_manifest.main_class);
-
         cmd_args.extend(args.game.matched_args());
     } else if let Some(args) = game_manifest.minecraft_arguments {
+        cmd_args.extend(["-cp".to_string(), "${classpath}".to_string()]);
+        cmd_args.push(game_manifest.main_class);
         cmd_args.extend(args.split(' ').map(|v| v.to_string()));
     }
 
@@ -49,6 +52,7 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
     )?.into_string().unwrap();
 
     let game_dir = instance.game_dir();
+    let resources_dir = instance.resources_dir();
 
     let ctx = HashMap::from([
         ("version_name".into(), instance.manifest.mc_version),
@@ -56,16 +60,20 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
         ("game_directory".into(), game_dir.to_str().unwrap().into()),
         ("assets_root".into(), get_assets_dir().to_str().unwrap().into()),
         ("assets_index_name".into(), game_manifest.asset_index.id),
+        ("game_assets".into(), resources_dir.to_str().unwrap().into()),
         ("classpath".into(), classpath),
         // FIXME what should this be? empty value causes various errors
+        // instance.dir.join("natives").to_str().unwrap().into()
         ("natives_directory".into(), "/tmp".into()),
         ("user_type".into(), "msa".into()),
         ("clientid".into(), get_msa_client_id()),
         ("auth_access_token".into(), account.access_token().into()),
+        ("auth_session".into(), format!("token:{token}:{profileId}",
+            token = account.access_token(), profileId = profile.id)),
         ("auth_player_name".into(), profile.name),
         ("auth_uuid".into(), profile.id),
-        ("launcher_name".into(), get_package_name()),
-        ("launcher_version".into(), get_package_version())
+        ("launcher_name".into(), get_package_name().into()),
+        ("launcher_version".into(), get_package_version().into())
     ]);
 
     for arg in cmd_args {
