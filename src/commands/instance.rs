@@ -59,6 +59,6 @@ impl Instance {
     }
 
     pub fn resources_dir(&self) -> PathBuf {
-        self.dir.join(&self.manifest.game_dir).join("resources")
+        self.game_dir().join("resources")
     }
 }

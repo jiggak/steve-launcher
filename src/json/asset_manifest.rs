@@ -3,7 +3,10 @@ use std::collections::HashMap;
 
 #[derive(Deserialize, Serialize)]
 pub struct AssetManifest {
-    pub objects: HashMap<String, AssetObject>
+    pub map_to_resources: Option<bool>,
+    pub objects: HashMap<String, AssetObject>,
+    #[serde(rename(deserialize = "virtual"))]
+    pub is_virtual: Option<bool>
 }
 
 #[derive(Deserialize, Serialize)]

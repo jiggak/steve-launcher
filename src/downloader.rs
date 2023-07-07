@@ -20,15 +20,14 @@ impl Downloader {
     }
 
     async fn fetch_json<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T, reqwest::Error> {
-        reqwest::get(url)
-            .await?
-            .json::<T>()
-            .await
+        self.client.get(url)
+            .send().await?
+            .json::<T>().await
     }
 
     async fn download_file(&self, url: &str, file_path: &Path) -> Result<(), Box<dyn StdError>> {
-        let mut stream = reqwest::get(url)
-            .await?
+        let mut stream = self.client.get(url)
+            .send().await?
             .error_for_status()?
             .bytes_stream();
 
@@ -93,7 +92,10 @@ impl Downloader {
             .text().await?)
     }
 
-    pub async fn download_game_files(&self, game_manifest: &GameManifest, progress: &mut dyn Progress) -> Result<(), Box<dyn StdError>> {
+    pub async fn download_game_files(&self,
+        game_manifest: &GameManifest,
+        progress: &mut dyn Progress
+    ) -> Result<AssetManifest, Box<dyn StdError>> {
         let asset_index_url = game_manifest.asset_index.download.url.as_str();
         let asset_manifest: AssetManifest = self.fetch_json(asset_index_url).await?;
 
@@ -146,6 +148,6 @@ impl Downloader {
 
         progress.end();
 
-        Ok(())
+        Ok(asset_manifest)
     }
 }

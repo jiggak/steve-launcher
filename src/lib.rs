@@ -5,11 +5,11 @@ mod rules;
 pub mod commands;
 
 use downloader::Downloader;
-use std::{fs, fs::File};
+use std::{fs, fs::File, path::Path};
 use std::error::Error as StdError;
 
-use env::{get_cache_dir, get_host_os};
-use json::{GameLibrary, GameLibraryArtifact, GameManifest};
+use env::{get_cache_dir, get_host_os, get_assets_dir};
+use json::{GameLibrary, GameLibraryArtifact, GameManifest, AssetManifest};
 use rules::RulesMatch;
 
 #[derive(Debug)]
@@ -87,6 +87,26 @@ pub fn get_matched_artifacts(libs: &Vec<GameLibrary>) -> impl Iterator<Item = &G
 
             return result;
         })
+}
+
+pub fn copy_resources(asset_manifest: &AssetManifest, resources_dir: &Path) -> Result<(), Box<dyn StdError>> {
+    let assets_dir = get_assets_dir();
+
+    for (path, obj) in asset_manifest.objects.iter() {
+        let object_path = assets_dir
+            .join("objects")
+            .join(&obj.hash[0..2])
+            .join(&obj.hash);
+
+        let resource_path = resources_dir.join(path);
+
+        if !resource_path.exists() {
+            fs::create_dir_all(resource_path.parent().unwrap())?;
+            fs::copy(object_path, resource_path)?;
+        }
+    }
+
+    Ok(())
 }
 
 impl json::GameArgs {

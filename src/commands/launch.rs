@@ -2,7 +2,7 @@ use std::error::Error as StdError;
 use std::{path::Path, process::Command, collections::HashMap};
 
 use crate::downloader::Downloader;
-use crate::{get_client_jar_path, get_game_manifest, get_matched_artifacts};
+use crate::{get_client_jar_path, get_game_manifest, get_matched_artifacts, copy_resources};
 use super::{account::Account, instance::Instance, Progress};
 use crate::env::{get_assets_dir, get_libs_dir, get_package_name, get_package_version, get_msa_client_id};
 
@@ -16,7 +16,18 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
 
     let game_manifest = get_game_manifest(&instance.manifest.mc_version).await?;
 
-    downloader.download_game_files(&game_manifest, progress).await?;
+    // these could all use progress feedback
+    // 1. Download game files
+    // 2. If required, build resources file structure
+    // 3. Extract native jars
+
+    let asset_manifest = downloader.download_game_files(&game_manifest, progress).await?;
+
+    if asset_manifest.is_virtual.unwrap_or(false) {
+        copy_resources(&asset_manifest, &get_assets_dir().join("virtual").join(&game_manifest.asset_index.id))?;
+    } else if asset_manifest.map_to_resources.unwrap_or(false) {
+        copy_resources(&asset_manifest, &instance.resources_dir())?;
+    }
 
     let mut cmd = Command::new(match &instance.manifest.java_path {
         Some(path) => path,
