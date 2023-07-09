@@ -61,4 +61,8 @@ impl Instance {
     pub fn resources_dir(&self) -> PathBuf {
         self.game_dir().join("resources")
     }
+
+    pub fn natives_dir(&self) -> PathBuf {
+        self.dir.join("natives")
+    }
 }

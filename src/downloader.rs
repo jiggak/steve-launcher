@@ -3,7 +3,7 @@ use std::error::Error as StdError;
 use std::{fs, io, fs::File, path::Path};
 use reqwest::Client;
 
-use crate::{get_client_jar_path, get_matched_artifacts};
+use crate::{get_client_jar_path, get_libs_for_download};
 use crate::{Error, commands::Progress};
 use crate::env::{get_assets_dir, get_libs_dir};
 use crate::json::{AssetDownload, AssetManifest, GameManifest, VersionManifest};
@@ -130,7 +130,7 @@ impl Downloader {
         ];
 
         lib_downloads.extend(
-            get_matched_artifacts(&game_manifest.libraries).map(|a| {
+            get_libs_for_download(&game_manifest.libraries).map(|a| {
                 (a.path.as_str(), &a.download)
             })
         );

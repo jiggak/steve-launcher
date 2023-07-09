@@ -2,7 +2,7 @@ use std::error::Error as StdError;
 use std::{path::Path, process::Command, collections::HashMap};
 
 use crate::downloader::Downloader;
-use crate::{get_client_jar_path, get_game_manifest, get_matched_artifacts, copy_resources};
+use crate::{get_client_jar_path, get_game_manifest, get_libs_for_launch, copy_resources, extract_natives};
 use super::{account::Account, instance::Instance, Progress};
 use crate::env::{get_assets_dir, get_libs_dir, get_package_name, get_package_version, get_msa_client_id};
 
@@ -29,6 +29,8 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
         copy_resources(&asset_manifest, &instance.resources_dir())?;
     }
 
+    extract_natives(&game_manifest, &instance.natives_dir())?;
+
     let mut cmd = Command::new(match &instance.manifest.java_path {
         Some(path) => path,
         _ => "java"
@@ -54,7 +56,7 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
     ];
 
     libs.extend(
-        get_matched_artifacts(&game_manifest.libraries)
+        get_libs_for_launch(&game_manifest.libraries)
             .map(|a| a.path.clone())
     );
 

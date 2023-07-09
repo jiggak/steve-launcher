@@ -8,7 +8,7 @@ use downloader::Downloader;
 use std::{fs, fs::File, path::Path};
 use std::error::Error as StdError;
 
-use env::{get_cache_dir, get_host_os, get_assets_dir};
+use env::{get_cache_dir, get_host_os, get_assets_dir, get_libs_dir};
 use json::{GameLibrary, GameLibraryArtifact, GameManifest, AssetManifest};
 use rules::RulesMatch;
 
@@ -57,9 +57,12 @@ fn get_client_jar_path(mc_version: &str) -> String {
     format!("com/mojang/minecraft/{mc_version}/minecraft-{mc_version}-client.jar")
 }
 
-pub fn get_matched_artifacts(libs: &Vec<GameLibrary>) -> impl Iterator<Item = &GameLibraryArtifact> {
-    libs.iter()
-        .filter(|lib| lib.rules.is_none() || lib.rules.as_ref().unwrap().matches())
+fn get_matched_libraries(libs: std::slice::Iter<GameLibrary>) -> impl Iterator<Item = &GameLibrary> {
+    libs.filter(|lib| lib.rules.is_none() || lib.rules.as_ref().unwrap().matches())
+}
+
+pub fn get_libs_for_download(libs: &Vec<GameLibrary>) -> impl Iterator<Item = &GameLibraryArtifact> {
+    get_matched_libraries(libs.iter())
         .flat_map(|lib| {
             let mut result = vec![];
 
@@ -89,6 +92,30 @@ pub fn get_matched_artifacts(libs: &Vec<GameLibrary>) -> impl Iterator<Item = &G
         })
 }
 
+pub fn get_libs_for_launch(libs: &Vec<GameLibrary>) -> impl Iterator<Item = &GameLibraryArtifact> {
+    get_matched_libraries(libs.iter())
+        .filter_map(|lib| lib.downloads.artifact.as_ref())
+}
+
+pub fn get_native_libs(libs: &Vec<GameLibrary>) -> impl Iterator<Item = &GameLibraryArtifact> {
+    get_matched_libraries(libs.iter())
+        .filter_map(|lib| {
+            if let Some(natives) = &lib.natives {
+                let natives_key = natives.get(get_host_os())
+                    .expect(format!("os name '{}' not found in lib {} natives", get_host_os(), lib.name).as_str());
+
+                if let Some(classifiers) = &lib.downloads.classifiers {
+                    let artifact = classifiers.get(natives_key)
+                        .expect(format!("expected key '{}' in lib {} classifiers", natives_key, lib.name).as_str());
+
+                    return Some(artifact)
+                }
+            }
+
+            None
+        })
+}
+
 pub fn copy_resources(asset_manifest: &AssetManifest, resources_dir: &Path) -> Result<(), Box<dyn StdError>> {
     let assets_dir = get_assets_dir();
 
@@ -104,6 +131,15 @@ pub fn copy_resources(asset_manifest: &AssetManifest, resources_dir: &Path) -> R
             fs::create_dir_all(resource_path.parent().unwrap())?;
             fs::copy(object_path, resource_path)?;
         }
+    }
+
+    Ok(())
+}
+
+pub fn extract_natives(game_manifest: &GameManifest, target_dir: &Path) -> Result<(), Box<dyn StdError>> {
+    for lib in get_native_libs(&game_manifest.libraries) {
+        let lib_file = get_libs_dir().join(&lib.path);
+        zip_extract::extract(File::open(lib_file)?, target_dir, false)?;
     }
 
     Ok(())
