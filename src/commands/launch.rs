@@ -1,8 +1,7 @@
 use std::error::Error as StdError;
-use std::{path::Path, process::Command, collections::HashMap};
+use std::{path::Path, path::PathBuf, process::Command, collections::HashMap};
 
-use crate::downloader::Downloader;
-use crate::assets::{copy_resources, extract_natives, get_asset_manfiest, get_client_jar_path, get_game_manifest};
+use crate::asset_manager::AssetManager;
 use super::{account::Account, instance::Instance, Progress};
 use crate::env::{get_assets_dir, get_libs_dir, get_package_name, get_package_version, get_msa_client_id};
 
@@ -12,26 +11,27 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
 
     let profile = account.fetch_profile().await?;
 
-    let downloader = Downloader::new();
+    let assets = AssetManager::new()?;
 
-    let game_manifest = get_game_manifest(&instance.manifest.mc_version).await?;
-    let asset_manifest = get_asset_manfiest(&game_manifest).await?;
+    let game_manifest = assets.get_game_manifest(&instance.manifest.mc_version).await?;
+    let asset_manifest = assets.get_asset_manfiest(&game_manifest).await?;
 
-    // TODO these could all use progress feedback
-    // 1. Download game files
-    // 2. If required, build resources file structure
-    // 3. Extract native jars
+    assets.download_assets(&asset_manifest, progress).await?;
+    assets.download_libraries(&game_manifest, progress).await?;
 
-    downloader.download_game_files(&game_manifest, &asset_manifest, progress).await?;
+    let mut resources_dir: Option<PathBuf> = None;
 
     if asset_manifest.is_virtual.unwrap_or(false) {
-        let virt_resources_dir = get_assets_dir().join("virtual").join(&game_manifest.asset_index.id);
-        copy_resources(&asset_manifest, &virt_resources_dir)?;
+        resources_dir = Some(assets.virtual_assets_dir(&game_manifest.asset_index.id));
     } else if asset_manifest.map_to_resources.unwrap_or(false) {
-        copy_resources(&asset_manifest, &instance.resources_dir())?;
+        resources_dir = Some(instance.resources_dir());
     }
 
-    extract_natives(&game_manifest, &instance.natives_dir())?;
+    if let Some(target_dir) = &resources_dir {
+        assets.copy_resources(&asset_manifest, target_dir, progress)?;
+    }
+
+    assets.extract_natives(&game_manifest, &instance.natives_dir(), progress)?;
 
     let mut cmd = Command::new(match &instance.manifest.java_path {
         Some(path) => path,
@@ -54,7 +54,7 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
     }
 
     let mut libs = vec![
-        get_client_jar_path(&game_manifest.id)
+        AssetManager::get_client_jar_path(&game_manifest.id)
     ];
 
     libs.extend(
@@ -69,19 +69,16 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
     )?.into_string().unwrap();
 
     let game_dir = instance.game_dir();
-    let resources_dir = instance.resources_dir();
+    let natives_dir = instance.natives_dir();
 
-    let ctx = HashMap::from([
+    let mut arg_ctx = HashMap::from([
         ("version_name".into(), instance.manifest.mc_version),
         ("version_type".into(), game_manifest.release_type),
         ("game_directory".into(), game_dir.to_str().unwrap().into()),
         ("assets_root".into(), get_assets_dir().to_str().unwrap().into()),
         ("assets_index_name".into(), game_manifest.asset_index.id),
-        ("game_assets".into(), resources_dir.to_str().unwrap().into()),
         ("classpath".into(), classpath),
-        // FIXME what should this be? empty value causes various errors
-        // instance.dir.join("natives").to_str().unwrap().into()
-        ("natives_directory".into(), "/tmp".into()),
+        ("natives_directory".into(), natives_dir.to_str().unwrap().into()),
         ("user_type".into(), "msa".into()),
         ("clientid".into(), get_msa_client_id()),
         ("auth_access_token".into(), account.access_token().into()),
@@ -93,8 +90,12 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
         ("launcher_version".into(), get_package_version().into())
     ]);
 
+    if let Some(path) = &resources_dir {
+        arg_ctx.insert("game_assets".into(), path.to_str().unwrap().into());
+    }
+
     for arg in cmd_args {
-        cmd.arg(envsubst::substitute(arg, &ctx)?);
+        cmd.arg(envsubst::substitute(arg, &arg_ctx)?);
     }
 
     println!("{:?}", cmd);

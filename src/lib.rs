@@ -1,4 +1,4 @@
-mod assets;
+mod asset_manager;
 pub mod commands;
 mod downloader;
 mod env;
