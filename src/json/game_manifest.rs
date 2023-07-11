@@ -1,6 +1,8 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 
+use crate::{rules::RulesMatch, env::get_host_os};
+
 #[derive(Deserialize)]
 pub struct GameManifest {
     pub arguments: Option<GameArgsIndex>,
@@ -37,6 +39,19 @@ pub struct GameArgsIndex {
 #[derive(Deserialize)]
 #[serde(from = "GameArgsRaw")]
 pub struct GameArgs(pub Vec<GameArg>);
+
+impl GameArgs {
+    pub fn matched_args(&self) -> impl Iterator<Item = String> + '_ {
+        self.0.iter()
+            .filter(|arg| arg.rules.matches())
+            .flat_map(|arg| {
+                match &arg.value {
+                    GameArgValue::Single(v) => vec![v.clone()],
+                    GameArgValue::Many(v) => v.to_vec()
+                }
+            })
+    }
+}
 
 #[derive(Deserialize)]
 struct GameArgsRaw(Vec<GameArgTypes>);
@@ -125,6 +140,38 @@ pub struct GameLibrary {
     pub name: String,
     pub natives: Option<HashMap<String, String>>,
     pub rules: Option<Vec<GameLibraryRule>>,
+}
+
+impl GameLibrary {
+    pub fn has_rules_match(&self) -> bool {
+        match &self.rules {
+            Some(rules) => rules.matches(),
+
+            // lib matches if rules don't exist
+            None => true
+        }
+    }
+
+    pub fn natives_artifact(&self) -> Option<&GameLibraryArtifact> {
+        match &self.natives {
+            Some(natives) => {
+                let host_os = get_host_os();
+
+                let natives_key = natives.get(host_os)
+                    .expect(format!("os name '{}' not found in lib {} natives", host_os, self.name).as_str());
+
+                let classifiers = self.downloads.classifiers.as_ref()
+                    .expect(format!("lib {} missing 'classifiers' object", self.name).as_str());
+
+                let artifact = classifiers.get(natives_key)
+                    .expect(format!("expected key '{}' in lib {} classifiers", natives_key, self.name).as_str());
+
+                Some(artifact)
+            }
+
+            None => None
+        }
+    }
 }
 
 #[derive(Deserialize)]

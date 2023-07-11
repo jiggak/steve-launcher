@@ -2,7 +2,7 @@ use std::error::Error as StdError;
 use std::{path::Path, process::Command, collections::HashMap};
 
 use crate::downloader::Downloader;
-use crate::{get_client_jar_path, get_game_manifest, get_libs_for_launch, copy_resources, extract_natives};
+use crate::assets::{copy_resources, extract_natives, get_asset_manfiest, get_client_jar_path, get_game_manifest};
 use super::{account::Account, instance::Instance, Progress};
 use crate::env::{get_assets_dir, get_libs_dir, get_package_name, get_package_version, get_msa_client_id};
 
@@ -15,16 +15,18 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
     let downloader = Downloader::new();
 
     let game_manifest = get_game_manifest(&instance.manifest.mc_version).await?;
+    let asset_manifest = get_asset_manfiest(&game_manifest).await?;
 
-    // these could all use progress feedback
+    // TODO these could all use progress feedback
     // 1. Download game files
     // 2. If required, build resources file structure
     // 3. Extract native jars
 
-    let asset_manifest = downloader.download_game_files(&game_manifest, progress).await?;
+    downloader.download_game_files(&game_manifest, &asset_manifest, progress).await?;
 
     if asset_manifest.is_virtual.unwrap_or(false) {
-        copy_resources(&asset_manifest, &get_assets_dir().join("virtual").join(&game_manifest.asset_index.id))?;
+        let virt_resources_dir = get_assets_dir().join("virtual").join(&game_manifest.asset_index.id);
+        copy_resources(&asset_manifest, &virt_resources_dir)?;
     } else if asset_manifest.map_to_resources.unwrap_or(false) {
         copy_resources(&asset_manifest, &instance.resources_dir())?;
     }
@@ -56,7 +58,9 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
     ];
 
     libs.extend(
-        get_libs_for_launch(&game_manifest.libraries)
+        game_manifest.libraries.iter()
+            .filter(|lib| lib.has_rules_match())
+            .filter_map(|lib| lib.downloads.artifact.as_ref())
             .map(|a| a.path.clone())
     );
 

@@ -3,7 +3,7 @@ use std::error::Error as StdError;
 use std::{fs, io, fs::File, path::Path};
 use reqwest::Client;
 
-use crate::{get_client_jar_path, get_libs_for_download};
+use crate::assets::{get_client_jar_path};
 use crate::{Error, commands::Progress};
 use crate::env::{get_assets_dir, get_libs_dir};
 use crate::json::{AssetDownload, AssetManifest, GameManifest, VersionManifest};
@@ -92,31 +92,20 @@ impl Downloader {
             .text().await?)
     }
 
+    pub async fn get_asset_manfiest(&self, url: &str) -> Result<AssetManifest, Box<dyn StdError>> {
+        Ok(self.fetch_json(url).await?)
+    }
+
     pub async fn download_game_files(&self,
         game_manifest: &GameManifest,
+        asset_manifest: &AssetManifest,
         progress: &mut dyn Progress
-    ) -> Result<AssetManifest, Box<dyn StdError>> {
-        let asset_index_url = game_manifest.asset_index.download.url.as_str();
-        let asset_manifest: AssetManifest = self.fetch_json(asset_index_url).await?;
-
-        let assets_dir = get_assets_dir();
-        let indexes_dir = assets_dir.join("indexes");
-        fs::create_dir_all(indexes_dir)?;
-
-        let index_file_path = assets_dir
-            .join("indexes")
-            .join(format!("{ver}.json", ver = game_manifest.asset_index.id));
-
-        let index_file = File::create(index_file_path)?;
-        serde_json::to_writer(index_file, &asset_manifest)?;
-
-        let mut current: usize = 1;
+    ) -> Result<(), Box<dyn StdError>> {
         progress.begin("Downloading assets", asset_manifest.objects.len());
 
-        for (_, obj) in asset_manifest.objects.iter() {
-            progress.advance(current);
+        for (i, (_, obj)) in asset_manifest.objects.iter().enumerate() {
+            progress.advance(i + 1);
             self.download_asset(&obj.hash).await?;
-            current += 1;
         }
 
         progress.end();
@@ -130,24 +119,39 @@ impl Downloader {
         ];
 
         lib_downloads.extend(
-            get_libs_for_download(&game_manifest.libraries).map(|a| {
-                (a.path.as_str(), &a.download)
-            })
+            game_manifest.libraries.iter()
+                .filter(|lib| lib.has_rules_match())
+                .flat_map(|lib| {
+                    // FIXME I think this can be simplified
+                    let mut result = vec![];
+
+                    if let Some(artifact) = &lib.downloads.artifact {
+                        result.push(artifact);
+                    }
+
+                    if let Some(natives) = lib.natives_artifact() {
+                        result.push(natives);
+                    }
+
+                    if result.is_empty() {
+                        panic!("unhandled download for {}", lib.name);
+                    }
+
+                    return result;
+                })
+                .map(|a| (a.path.as_str(), &a.download))
         );
 
-        current = 1;
         progress.begin("Downloading libraries", lib_downloads.len());
 
-        for (path, dl) in lib_downloads {
-            progress.advance(current);
+        for (i, (path, dl)) in lib_downloads.iter().enumerate() {
+            progress.advance(i + 1);
 
             self.download_library(&path, &dl).await?;
-
-            current += 1;
         }
 
         progress.end();
 
-        Ok(asset_manifest)
+        Ok(())
     }
 }
