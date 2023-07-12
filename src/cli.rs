@@ -25,5 +25,6 @@ pub enum Commands {
         dir: PathBuf
     },
 
+    /// Authenticate with your Microsoft account and save account details
     Auth
 }

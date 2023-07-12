@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 
-use crate::{rules::RulesMatch, env::get_host_os};
+use crate::{env, rules::RulesMatch};
 
 #[derive(Deserialize)]
 pub struct GameManifest {
@@ -155,7 +155,7 @@ impl GameLibrary {
     pub fn natives_artifact(&self) -> Option<&GameLibraryArtifact> {
         match &self.natives {
             Some(natives) => {
-                let host_os = get_host_os();
+                let host_os = env::get_host_os();
 
                 let natives_key = natives.get(host_os)
                     .expect(format!("os name '{}' not found in lib {} natives", host_os, self.name).as_str());

@@ -1,9 +1,9 @@
 use std::error::Error as StdError;
 use std::{path::Path, path::PathBuf, process::Command, collections::HashMap};
 
-use crate::asset_manager::AssetManager;
+use crate::{asset_manager::AssetManager, env};
 use super::{account::Account, instance::Instance, Progress};
-use crate::env::{get_assets_dir, get_libs_dir, get_package_name, get_package_version, get_msa_client_id};
+
 
 pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -> Result<(), Box<dyn StdError>> {
     let instance = Instance::load(&instance_dir)?;
@@ -65,7 +65,7 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
     );
 
     let classpath = std::env::join_paths(
-        libs.iter().map(|p| get_libs_dir().join(p))
+        libs.iter().map(|p| env::get_libs_dir().join(p))
     )?.into_string().unwrap();
 
     let game_dir = instance.game_dir();
@@ -75,19 +75,19 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
         ("version_name".into(), instance.manifest.mc_version),
         ("version_type".into(), game_manifest.release_type),
         ("game_directory".into(), game_dir.to_str().unwrap().into()),
-        ("assets_root".into(), get_assets_dir().to_str().unwrap().into()),
+        ("assets_root".into(), env::get_assets_dir().to_str().unwrap().into()),
         ("assets_index_name".into(), game_manifest.asset_index.id),
         ("classpath".into(), classpath),
         ("natives_directory".into(), natives_dir.to_str().unwrap().into()),
         ("user_type".into(), "msa".into()),
-        ("clientid".into(), get_msa_client_id()),
+        ("clientid".into(), env::get_msa_client_id()),
         ("auth_access_token".into(), account.access_token().into()),
         ("auth_session".into(), format!("token:{token}:{profileId}",
             token = account.access_token(), profileId = profile.id)),
         ("auth_player_name".into(), profile.name),
         ("auth_uuid".into(), profile.id),
-        ("launcher_name".into(), get_package_name().into()),
-        ("launcher_version".into(), get_package_version().into())
+        ("launcher_name".into(), env::get_package_name().into()),
+        ("launcher_version".into(), env::get_package_version().into())
     ]);
 
     if let Some(path) = &resources_dir {
@@ -98,7 +98,6 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
         cmd.arg(envsubst::substitute(arg, &arg_ctx)?);
     }
 
-    println!("{:?}", cmd);
     cmd.spawn()?;
 
     Ok(())

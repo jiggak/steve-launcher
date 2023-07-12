@@ -13,7 +13,7 @@ use oauth2::{
     basic::BasicClient, basic::BasicTokenType, reqwest::async_http_client
 };
 
-use crate::env::{get_data_dir, get_msa_client_id};
+use crate::env;
 use crate::json::{AccountManifest, MicrosoftToken, MinecraftToken, MinecraftProfile};
 
 const MANIFEST_FILE: &str = "account.json";
@@ -26,13 +26,13 @@ pub type LoginCallback = fn(url: &str, code: &str);
 
 impl Account {
     fn write_manifest(&self) -> Result<(), Box<dyn StdError>> {
-        let manifest_path = get_data_dir().join(MANIFEST_FILE);
+        let manifest_path = env::get_data_dir().join(MANIFEST_FILE);
         let manifest_json = serde_json::to_string_pretty(&self.manifest)?;
         Ok(fs::write(manifest_path, manifest_json)?)
     }
 
     pub fn load() -> Result<Self, Box<dyn StdError>> {
-        let manifest_path = get_data_dir().join(MANIFEST_FILE);
+        let manifest_path = env::get_data_dir().join(MANIFEST_FILE);
         let json = fs::read_to_string(manifest_path)?;
 
         Ok(Account {
@@ -110,7 +110,7 @@ fn oauth_client() -> Result<BasicClient, Box<dyn StdError>> {
     )?;
 
     Ok(BasicClient::new(
-        ClientId::new(get_msa_client_id().to_string()),
+        ClientId::new(env::get_msa_client_id().to_string()),
         None,
         auth_url,
         Some(token_url)

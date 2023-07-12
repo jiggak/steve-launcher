@@ -1,8 +1,7 @@
 use std::{fs, path::Path, path::PathBuf};
 use std::error::Error as StdError;
 
-use crate::{Error, commands::Progress, downloader::Downloader};
-use crate::env::{get_assets_dir, get_cache_dir, get_libs_dir};
+use crate::{env, Error, commands::Progress, downloader::Downloader};
 use crate::json::{AssetDownload, AssetManifest, GameManifest};
 
 pub struct AssetManager {
@@ -16,9 +15,9 @@ impl AssetManager {
     pub fn new() -> Result<Self, Box<dyn StdError>> {
         let manager = AssetManager {
             downloader: Downloader::new(),
-            assets_dir: get_assets_dir(),
-            cache_dir: get_cache_dir(),
-            libs_dir: get_libs_dir()
+            assets_dir: env::get_assets_dir(),
+            cache_dir: env::get_cache_dir(),
+            libs_dir: env::get_libs_dir()
         };
 
         fs::create_dir_all(manager.objects_dir())?;
