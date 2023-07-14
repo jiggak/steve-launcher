@@ -1,5 +1,5 @@
 use std::error::Error as StdError;
-use std::{path::Path, path::PathBuf, process::Command, collections::HashMap};
+use std::{fs, path::Path, path::PathBuf, process::Command, collections::HashMap};
 
 use crate::{asset_manager::AssetManager, env};
 use super::{account::Account, instance::Instance, Progress};
@@ -33,6 +33,7 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
 
     assets.extract_natives(&game_manifest, &instance.natives_dir(), progress)?;
 
+    // use java override path from instance manifest, or default to "java" in PATH
     let mut cmd = Command::new(match &instance.manifest.java_path {
         Some(path) => path,
         _ => "java"
@@ -41,13 +42,20 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
     // set current directory for log output
     cmd.current_dir(instance.game_dir());
 
+    fs::create_dir_all(instance.game_dir())?;
+
     let mut cmd_args: Vec<String> = vec![];
 
+    // newer versions of minecraft
     if let Some(args) = game_manifest.arguments {
         cmd_args.extend(args.jvm.matched_args());
         cmd_args.push(game_manifest.main_class);
         cmd_args.extend(args.game.matched_args());
+
+    // older version of minecraft
     } else if let Some(args) = game_manifest.minecraft_arguments {
+        // older version don't include JVM args in manifest
+        cmd_args.push("-Djava.library.path=${natives_directory}".to_string());
         cmd_args.extend(["-cp".to_string(), "${classpath}".to_string()]);
         cmd_args.push(game_manifest.main_class);
         cmd_args.extend(args.split(' ').map(|v| v.to_string()));
@@ -98,6 +106,7 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
         cmd.arg(envsubst::substitute(arg, &arg_ctx)?);
     }
 
+    println!("{:?}", cmd);
     cmd.spawn()?;
 
     Ok(())

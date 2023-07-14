@@ -10,11 +10,11 @@ pub struct GameManifest {
     pub asset_index: GameAssetIndex,
     pub assets: String,
     #[serde(rename(deserialize = "complianceLevel"))]
-    pub compliance_level: u8,
+    pub compliance_level: Option<u8>,
     pub downloads: HashMap<String, AssetDownload>,
     pub id: String,
     #[serde(rename(deserialize = "javaVersion"))]
-    pub java_version: GameJavaVersion,
+    pub java_version: Option<GameJavaVersion>,
     pub libraries: Vec<GameLibrary>,
     pub logging: Option<GameLogging>,
     #[serde(rename(deserialize = "mainClass"))]

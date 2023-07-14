@@ -5,7 +5,7 @@ use std::collections::HashMap;
 pub struct AssetManifest {
     pub map_to_resources: Option<bool>,
     pub objects: HashMap<String, AssetObject>,
-    #[serde(rename(deserialize = "virtual"))]
+    #[serde(rename(deserialize = "virtual", serialize = "virtual"))]
     pub is_virtual: Option<bool>
 }
 
