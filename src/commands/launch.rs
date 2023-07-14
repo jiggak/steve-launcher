@@ -103,7 +103,14 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
     }
 
     for arg in cmd_args {
-        cmd.arg(envsubst::substitute(arg, &arg_ctx)?);
+        // envsubst fails if the value for subst contains any of "$", "{", "}"
+        // we can't use arg_ctx for user_properties="{}"
+        // no idea what this arg does but MC fails to launch unless set to empty json obj
+        if arg.contains("${user_properties}") {
+            cmd.arg(arg.replace("${user_properties}", "{}"));
+        } else {
+            cmd.arg(envsubst::substitute(arg, &arg_ctx)?);
+        }
     }
 
     println!("{:?}", cmd);
