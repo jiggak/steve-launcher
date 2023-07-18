@@ -2,7 +2,7 @@ use std::{fs, path::Path, path::PathBuf};
 use std::error::Error as StdError;
 
 use crate::{env, Error, commands::Progress, downloader::Downloader};
-use crate::json::{AssetDownload, AssetManifest, GameManifest};
+use crate::json::{AssetDownload, AssetManifest, GameManifest, ForgeManifest};
 
 pub struct AssetManager {
     downloader: Downloader,
@@ -61,6 +61,22 @@ impl AssetManager {
         let game_manifest: GameManifest = serde_json::from_reader(version_file)?;
 
         Ok(game_manifest)
+    }
+
+    pub async fn get_forge_manifest(&self, forge_version: &str) -> Result<ForgeManifest, Box<dyn StdError>> {
+        let version_file_path = self.versions_dir()
+            .join(format!("forge_{forge_version}.json"));
+
+        if !version_file_path.exists() {
+            let json = self.downloader.get_forge_manifest_json(forge_version).await?;
+
+            fs::write(&version_file_path, json)?;
+        }
+
+        let version_file = fs::File::open(version_file_path)?;
+        let forge_manifest: ForgeManifest = serde_json::from_reader(version_file)?;
+
+        Ok(forge_manifest)
     }
 
     pub async fn get_asset_manfiest(&self, game_manifest: &GameManifest) -> Result<AssetManifest, Box<dyn StdError>> {
@@ -156,6 +172,28 @@ impl AssetManager {
         progress.begin("Downloading libraries", lib_downloads.len());
 
         for (i, (path, dl)) in lib_downloads.iter().enumerate() {
+            progress.advance(i + 1);
+            self.download_library(path, dl).await?;
+        }
+
+        progress.end();
+
+        Ok(())
+    }
+
+    pub async fn download_forge_libraries(&self,
+        forge_manifest: &ForgeManifest,
+        progress: &mut dyn Progress
+    ) -> Result<(), Box<dyn StdError>> {
+        let downloads: Vec<_> = forge_manifest.libraries.iter()
+            .chain(forge_manifest.maven_files.iter())
+            .map(|lib| &lib.downloads.artifact)
+            .map(|a| (a.asset_path(), &a.download))
+            .collect();
+
+        progress.begin("Downloading forge libraries", downloads.len());
+
+        for (i, (path, dl)) in downloads.iter().enumerate() {
             progress.advance(i + 1);
             self.download_library(path, dl).await?;
         }

@@ -4,9 +4,10 @@ use std::{io, fs::File, path::Path};
 use reqwest::Client;
 
 use crate::Error;
-use crate::json::{AssetManifest, VersionManifest};
+use crate::json::{AssetManifest, VersionManifest, ForgeVersionManifest};
 
 const VERSION_MANIFEST_URL: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
+const FORGE_INDEX_URL: &str = "https://meta.prismlauncher.org/v1/net.minecraftforge/index.json";
 
 pub struct Downloader {
     client: Client
@@ -43,7 +44,7 @@ impl Downloader {
 
         let version = manifest.versions.iter()
             .find(|v| v.id == mc_version)
-            .ok_or(Error::new("Version not found"))?;
+            .ok_or(Error::new("Minecraft version not found"))?;
 
         Ok(self.client.get(&version.url)
             .send().await?
@@ -52,5 +53,17 @@ impl Downloader {
 
     pub async fn get_asset_manfiest(&self, url: &str) -> Result<AssetManifest, Box<dyn StdError>> {
         Ok(self.fetch_json(url).await?)
+    }
+
+    pub async fn get_forge_manifest_json(&self, forge_version: &str) -> Result<String, Box<dyn StdError>> {
+        let index: ForgeVersionManifest = self.fetch_json(FORGE_INDEX_URL).await?;
+
+        index.versions.iter()
+            .find(|v| v.version == forge_version)
+            .ok_or(Error::new("Forge version not found"))?;
+
+        Ok(self.client.get(FORGE_INDEX_URL.replace("index.json", format!("{forge_version}.json").as_str()))
+            .send().await?
+            .text().await?)
     }
 }

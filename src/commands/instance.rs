@@ -36,7 +36,8 @@ impl Instance {
             InstanceManifest {
                 mc_version: mc_version.to_string(),
                 game_dir: "minecraft".to_string(),
-                java_path: None
+                java_path: None,
+                forge_version: None
             }
         )?;
 

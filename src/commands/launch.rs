@@ -16,8 +16,17 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
     let game_manifest = assets.get_game_manifest(&instance.manifest.mc_version).await?;
     let asset_manifest = assets.get_asset_manfiest(&game_manifest).await?;
 
+    let forge_manifest = match &instance.manifest.forge_version {
+        Some(forge_version) => Some(assets.get_forge_manifest(forge_version).await?),
+        None => None
+    };
+
     assets.download_assets(&asset_manifest, progress).await?;
     assets.download_libraries(&game_manifest, progress).await?;
+
+    if let Some(forge_manifest) = &forge_manifest {
+        assets.download_forge_libraries(forge_manifest, progress).await?;
+    }
 
     let mut resources_dir: Option<PathBuf> = None;
 
@@ -46,8 +55,14 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
 
     let mut cmd_args: Vec<String> = vec![];
 
+    if let Some(forge_manifest) = &forge_manifest {
+        cmd_args.push("-Djava.library.path=${natives_directory}".to_string());
+        cmd_args.extend(["-cp".to_string(), "${classpath}".to_string()]);
+        cmd_args.push(forge_manifest.main_class.clone());
+        cmd_args.extend(forge_manifest.minecraft_arguments.split(' ').map(|v| v.to_string()));
+
     // newer versions of minecraft
-    if let Some(args) = game_manifest.arguments {
+    } else if let Some(args) = game_manifest.arguments {
         cmd_args.extend(args.jvm.matched_args());
         cmd_args.push(game_manifest.main_class);
         cmd_args.extend(args.game.matched_args());
@@ -71,6 +86,13 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
             .filter_map(|lib| lib.downloads.artifact.as_ref())
             .map(|a| a.path.clone())
     );
+
+    if let Some(forge_manifest) = &forge_manifest {
+        libs.extend(
+            forge_manifest.libraries.iter()
+                .map(|lib| lib.downloads.artifact.asset_path())
+        );
+    }
 
     let classpath = std::env::join_paths(
         libs.iter().map(|p| env::get_libs_dir().join(p))
@@ -113,7 +135,6 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
         }
     }
 
-    println!("{:?}", cmd);
     cmd.spawn()?;
 
     Ok(())

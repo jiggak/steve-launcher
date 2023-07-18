@@ -4,5 +4,6 @@ use serde::{Deserialize, Serialize};
 pub struct InstanceManifest {
     pub mc_version: String,
     pub game_dir: String,
-    pub java_path: Option<String>
+    pub java_path: Option<String>,
+    pub forge_version: Option<String>
 }
