@@ -4,18 +4,18 @@ use std::{io, fs::File, path::Path};
 use reqwest::Client;
 
 use crate::Error;
-use crate::json::{AssetManifest, VersionManifest, ForgeVersionManifest};
+use crate::json::{AssetManifest, VersionManifest, ForgeVersionManifest, ForgeVersionManifestEntry};
 
 const VERSION_MANIFEST_URL: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 const FORGE_INDEX_URL: &str = "https://meta.prismlauncher.org/v1/net.minecraftforge/index.json";
 
-pub struct Downloader {
+pub struct AssetClient {
     client: Client
 }
 
-impl Downloader {
+impl AssetClient {
     pub fn new() -> Self {
-        Downloader { client: Client::new() }
+        AssetClient { client: Client::new() }
     }
 
     async fn fetch_json<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T, reqwest::Error> {
@@ -65,5 +65,16 @@ impl Downloader {
         Ok(self.client.get(FORGE_INDEX_URL.replace("index.json", format!("{forge_version}.json").as_str()))
             .send().await?
             .text().await?)
+    }
+
+    pub async fn get_forge_versions(&self, mc_version: &str) -> Result<Vec<ForgeVersionManifestEntry>, Box<dyn StdError>> {
+        let index: ForgeVersionManifest = self.fetch_json(FORGE_INDEX_URL).await?;
+
+        let versions = index.versions.iter()
+            .filter(|v| v.is_for_mc_version(mc_version))
+            .map(|v| v.clone())
+            .collect();
+
+        Ok(versions)
     }
 }

@@ -1,6 +1,6 @@
+mod asset_client;
 mod asset_manager;
 pub mod commands;
-mod downloader;
 mod env;
 mod json;
 mod rules;

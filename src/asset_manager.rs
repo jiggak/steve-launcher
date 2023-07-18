@@ -1,11 +1,11 @@
 use std::{fs, path::Path, path::PathBuf};
 use std::error::Error as StdError;
 
-use crate::{env, Error, commands::Progress, downloader::Downloader};
+use crate::{env, Error, commands::Progress, asset_client::AssetClient};
 use crate::json::{AssetDownload, AssetManifest, GameManifest, ForgeManifest};
 
 pub struct AssetManager {
-    downloader: Downloader,
+    client: AssetClient,
     assets_dir: PathBuf,
     cache_dir: PathBuf,
     libs_dir: PathBuf
@@ -14,7 +14,7 @@ pub struct AssetManager {
 impl AssetManager {
     pub fn new() -> Result<Self, Box<dyn StdError>> {
         let manager = AssetManager {
-            downloader: Downloader::new(),
+            client: AssetClient::new(),
             assets_dir: env::get_assets_dir(),
             cache_dir: env::get_cache_dir(),
             libs_dir: env::get_libs_dir()
@@ -52,7 +52,7 @@ impl AssetManager {
             .join(format!("{mc_version}.json"));
 
         if !version_file_path.exists() {
-            let game_manifest_json = self.downloader.get_game_manifest_json(mc_version).await?;
+            let game_manifest_json = self.client.get_game_manifest_json(mc_version).await?;
 
             fs::write(&version_file_path, game_manifest_json)?;
         }
@@ -68,7 +68,7 @@ impl AssetManager {
             .join(format!("forge_{forge_version}.json"));
 
         if !version_file_path.exists() {
-            let json = self.downloader.get_forge_manifest_json(forge_version).await?;
+            let json = self.client.get_forge_manifest_json(forge_version).await?;
 
             fs::write(&version_file_path, json)?;
         }
@@ -89,7 +89,7 @@ impl AssetManager {
         }
 
         let asset_index_url = game_manifest.asset_index.download.url.as_str();
-        let asset_manifest = self.downloader.get_asset_manfiest(asset_index_url).await?;
+        let asset_manifest = self.client.get_asset_manfiest(asset_index_url).await?;
 
         let index_file = fs::File::create(index_file_path)?;
         serde_json::to_writer(index_file, &asset_manifest)?;
@@ -130,7 +130,7 @@ impl AssetManager {
 
         let url = format!("https://resources.download.minecraft.net/{hash_prefix}/{hash}");
 
-        self.downloader.download_file(&url, &object_file).await
+        self.client.download_file(&url, &object_file).await
     }
 
     pub async fn download_libraries(&self,
@@ -213,7 +213,7 @@ impl AssetManager {
 
         fs::create_dir_all(lib_file.parent().unwrap())?;
 
-        self.downloader.download_file(&download.url, &lib_file).await
+        self.client.download_file(&download.url, &lib_file).await
     }
 
     pub fn copy_resources(&self,

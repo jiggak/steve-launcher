@@ -5,7 +5,7 @@ pub struct ForgeVersionManifest {
     pub versions: Vec<ForgeVersionManifestEntry>
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct ForgeVersionManifestEntry {
     pub recommended: bool,
     #[serde(rename(deserialize = "releaseTime"))]
@@ -15,7 +15,13 @@ pub struct ForgeVersionManifestEntry {
     pub version: String
 }
 
-#[derive(Deserialize)]
+impl ForgeVersionManifestEntry {
+    pub fn is_for_mc_version(&self, mc_version: &str) -> bool {
+        self.requires.iter().any(|r| r.equals == mc_version)
+    }
+}
+
+#[derive(Deserialize, Clone)]
 pub struct ForgeVersionRequires {
     pub equals: String,
     pub uid: String

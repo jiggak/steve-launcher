@@ -27,7 +27,7 @@ impl Instance {
         })
     }
 
-    pub fn create(instance_dir: &Path, mc_version: &str) -> Result<Instance, Box<dyn StdError>> {
+    pub fn create(instance_dir: &Path, mc_version: &str, forge_version: Option<String>) -> Result<Instance, Box<dyn StdError>> {
         // create directory to contain instance
         fs::create_dir(instance_dir)?;
 
@@ -37,7 +37,7 @@ impl Instance {
                 mc_version: mc_version.to_string(),
                 game_dir: "minecraft".to_string(),
                 java_path: None,
-                forge_version: None
+                forge_version: forge_version
             }
         )?;
 
