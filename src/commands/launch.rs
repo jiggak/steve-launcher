@@ -1,5 +1,5 @@
 use std::error::Error as StdError;
-use std::{fs, path::Path, path::PathBuf, process::Command, collections::HashMap};
+use std::{fs, path::Path, process::Command, collections::HashMap};
 
 use crate::{asset_manager::AssetManager, env};
 use super::{account::Account, instance::Instance, Progress};
@@ -28,13 +28,13 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
         assets.download_forge_libraries(forge_manifest, progress).await?;
     }
 
-    let mut resources_dir: Option<PathBuf> = None;
-
-    if asset_manifest.is_virtual.unwrap_or(false) {
-        resources_dir = Some(assets.virtual_assets_dir(&game_manifest.asset_index.id));
+    let resources_dir = if asset_manifest.is_virtual.unwrap_or(false) {
+        Some(assets.virtual_assets_dir(&game_manifest.asset_index.id))
     } else if asset_manifest.map_to_resources.unwrap_or(false) {
-        resources_dir = Some(instance.resources_dir());
-    }
+        Some(instance.resources_dir())
+    } else {
+        None
+    };
 
     if let Some(target_dir) = &resources_dir {
         assets.copy_resources(&asset_manifest, target_dir, progress)?;
