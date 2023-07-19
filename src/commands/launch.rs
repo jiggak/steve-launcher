@@ -102,22 +102,24 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
     let natives_dir = instance.natives_dir();
 
     let mut arg_ctx = HashMap::from([
-        ("version_name".into(), instance.manifest.mc_version),
-        ("version_type".into(), game_manifest.release_type),
-        ("game_directory".into(), game_dir.to_str().unwrap().into()),
-        ("assets_root".into(), env::get_assets_dir().to_str().unwrap().into()),
-        ("assets_index_name".into(), game_manifest.asset_index.id),
-        ("classpath".into(), classpath),
-        ("natives_directory".into(), natives_dir.to_str().unwrap().into()),
-        ("user_type".into(), "msa".into()),
-        ("clientid".into(), env::get_msa_client_id()),
-        ("auth_access_token".into(), account.access_token().into()),
-        ("auth_session".into(), format!("token:{token}:{profileId}",
+        ("version_name", instance.manifest.mc_version),
+        ("version_type", game_manifest.release_type),
+        ("game_directory", game_dir.to_str().unwrap().into()),
+        ("assets_root", env::get_assets_dir().to_str().unwrap().into()),
+        ("assets_index_name", game_manifest.asset_index.id),
+        ("classpath", classpath),
+        ("natives_directory", natives_dir.to_str().unwrap().into()),
+        ("user_type", "msa".into()),
+        ("clientid", env::get_msa_client_id()),
+        ("auth_access_token", account.access_token().into()),
+        ("auth_session", format!("token:{token}:{profileId}",
             token = account.access_token(), profileId = profile.id)),
-        ("auth_player_name".into(), profile.name),
-        ("auth_uuid".into(), profile.id),
-        ("launcher_name".into(), env::get_package_name().into()),
-        ("launcher_version".into(), env::get_package_version().into())
+        ("auth_player_name", profile.name),
+        ("auth_uuid", profile.id),
+        ("launcher_name", env::get_package_name().into()),
+        ("launcher_version", env::get_package_version().into()),
+        // no idea what this arg does but MC fails to launch unless set to empty json obj
+        ("user_properties", "{}".into())
     ]);
 
     if let Some(path) = &resources_dir {
@@ -125,14 +127,12 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
     }
 
     for arg in cmd_args {
-        // envsubst fails if the value for subst contains any of "$", "{", "}"
-        // we can't use arg_ctx for user_properties="{}"
-        // no idea what this arg does but MC fails to launch unless set to empty json obj
-        if arg.contains("${user_properties}") {
-            cmd.arg(arg.replace("${user_properties}", "{}"));
-        } else {
-            cmd.arg(envsubst::substitute(arg, &arg_ctx)?);
-        }
+        cmd.arg(
+            shellexpand::env_with_context_no_errors(
+                &arg,
+                |var:&str| arg_ctx.get(var)
+            ).to_string()
+        );
     }
 
     cmd.spawn()?;
