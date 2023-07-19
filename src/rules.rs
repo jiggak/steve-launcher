@@ -16,6 +16,7 @@ impl RulesMatch for Vec<GameArgRule> {
     }
 }
 
+#[allow(dead_code)]
 struct RulesContext {
     host_os: &'static str,
     host_version: &'static str,

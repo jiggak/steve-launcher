@@ -4,7 +4,7 @@
 
 use chrono::{Duration, OutOfRangeError, Utc};
 use reqwest::Client;
-use serde::{Deserialize};
+use serde::Deserialize;
 use serde_json::json;
 use std::{collections::HashMap, error::Error as StdError, fs};
 use oauth2::{
@@ -218,6 +218,7 @@ async fn get_profile(mc_access_token: &str) -> Result<MinecraftProfile, Box<dyn 
         .json::<MinecraftProfile>().await?)
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct XboxAuthResponse {
     #[serde(rename(deserialize = "IssueInstant"))]
@@ -233,6 +234,7 @@ struct XboxAuthResponse {
     display_claims: HashMap<String, Vec<HashMap<String, String>>>
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct MinecraftAuthResponse {
     username: String,
