@@ -2,7 +2,7 @@ use std::{fs, path::Path, path::PathBuf};
 use std::error::Error as StdError;
 
 use crate::{env, Error, commands::Progress, asset_client::AssetClient};
-use crate::json::{AssetDownload, AssetManifest, GameManifest, ForgeManifest};
+use crate::json::{AssetManifest, GameManifest, ForgeManifest};
 
 pub struct AssetManager {
     client: AssetClient,
@@ -141,15 +141,15 @@ impl AssetManager {
             .ok_or(Error::new("Missing 'client' key in downloads object"))?;
 
         let client_path = Self::get_client_jar_path(&game_manifest.id);
-        let mut lib_downloads: Vec<(&str, &AssetDownload)> = vec![
-            (client_path.as_str(), client)
+        let mut lib_downloads: Vec<(&str, &String)> = vec![
+            (client_path.as_str(), &client.url)
         ];
 
         lib_downloads.extend(
             game_manifest.libraries.iter()
                 .filter(|lib| lib.has_rules_match())
                 .flat_map(|lib| {
-                    // FIXME I think this can be simplified
+                    // FIXME I think this can be done in a more Rust'y way
                     let mut result = vec![];
 
                     if let Some(artifact) = &lib.downloads.artifact {
@@ -166,14 +166,14 @@ impl AssetManager {
 
                     return result;
                 })
-                .map(|a| (a.path.as_str(), &a.download))
+                .map(|a| (a.path.as_str(), &a.download.url))
         );
 
         progress.begin("Downloading libraries", lib_downloads.len());
 
-        for (i, (path, dl)) in lib_downloads.iter().enumerate() {
+        for (i, (path, url)) in lib_downloads.iter().enumerate() {
             progress.advance(i + 1);
-            self.download_library(path, dl).await?;
+            self.download_library(path, url).await?;
         }
 
         progress.end();
@@ -185,17 +185,22 @@ impl AssetManager {
         forge_manifest: &ForgeManifest,
         progress: &mut dyn Progress
     ) -> Result<(), Box<dyn StdError>> {
+        // let srcs: dyn Iterator<Item = ForgeLibrary> = match forge_manifest.maven_files {
+        //     Some(maven_files) => forge_manifest.libraries.iter().chain(maven_files.iter()),
+        //     None => forge_manifest.libraries.iter()
+        // };
+
         let downloads: Vec<_> = forge_manifest.libraries.iter()
-            .chain(forge_manifest.maven_files.iter())
-            .map(|lib| &lib.downloads.artifact)
-            .map(|a| (a.asset_path(), &a.download))
+            // FIXME there must be a cleaner way to optionally chain the maven_file as iterator
+            .chain(forge_manifest.maven_files.as_ref().unwrap_or(&vec![]).iter())
+            .map(|lib| (lib.asset_path(), lib.download_url()))
             .collect();
 
         progress.begin("Downloading forge libraries", downloads.len());
 
-        for (i, (path, dl)) in downloads.iter().enumerate() {
+        for (i, (path, url)) in downloads.iter().enumerate() {
             progress.advance(i + 1);
-            self.download_library(path, dl).await?;
+            self.download_library(path, url).await?;
         }
 
         progress.end();
@@ -203,7 +208,7 @@ impl AssetManager {
         Ok(())
     }
 
-    async fn download_library(&self, path: &str, download: &AssetDownload) -> Result<(), Box<dyn StdError>> {
+    async fn download_library(&self, path: &str, url: &str) -> Result<(), Box<dyn StdError>> {
         let lib_file = self.libs_dir.join(path);
 
         // skip download if lib file already exists
@@ -213,7 +218,7 @@ impl AssetManager {
 
         fs::create_dir_all(lib_file.parent().unwrap())?;
 
-        self.client.download_file(&download.url, &lib_file).await
+        self.client.download_file(url, &lib_file).await
     }
 
     pub fn copy_resources(&self,

@@ -59,7 +59,16 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
         cmd_args.push("-Djava.library.path=${natives_directory}".to_string());
         cmd_args.extend(["-cp".to_string(), "${classpath}".to_string()]);
         cmd_args.push(forge_manifest.main_class.clone());
-        cmd_args.extend(forge_manifest.minecraft_arguments.split(' ').map(|v| v.to_string()));
+
+        if let Some(args) = &forge_manifest.minecraft_arguments {
+            cmd_args.extend(args.split(' ').map(|v| v.to_string()));
+        } else if let Some(args) = game_manifest.minecraft_arguments {
+            cmd_args.extend(args.split(' ').map(|v| v.to_string()));
+        }
+
+        if let Some(tweaks) = &forge_manifest.tweakers {
+            cmd_args.extend(["--tweakClass".to_string(), tweaks[0].clone()]);
+        }
 
     // newer versions of minecraft
     } else if let Some(args) = game_manifest.arguments {
@@ -90,7 +99,7 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
     if let Some(forge_manifest) = &forge_manifest {
         libs.extend(
             forge_manifest.libraries.iter()
-                .map(|lib| lib.downloads.artifact.asset_path())
+                .map(|lib| lib.asset_path())
         );
     }
 
