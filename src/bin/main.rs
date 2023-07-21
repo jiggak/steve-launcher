@@ -4,7 +4,7 @@ use dialoguer::Select;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
 use cli::{Parser, Cli, Commands};
-use mcli::commands::{Progress, create_instance, get_forge_versions, launch_instance, login};
+use steve::commands::{Progress, create_instance, get_forge_versions, launch_instance, login};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
