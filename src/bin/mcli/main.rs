@@ -50,7 +50,7 @@ async fn prompt_forge_version(mc_version: &String) -> Result<String, Box<dyn std
 
     let items: Vec<_> = versions.iter()
         .map(|v| match v.recommended {
-            false => v.version.clone(),
+            false => v.version.to_string(),
             true => format!("{ver} *", ver = v.version)
         })
         .collect();
@@ -61,7 +61,7 @@ async fn prompt_forge_version(mc_version: &String) -> Result<String, Box<dyn std
         .default(recommend_index)
         .interact()?;
 
-    Ok(versions[selection].version.clone())
+    Ok(versions[selection].version.to_string())
 }
 
 struct ProgressHandler {

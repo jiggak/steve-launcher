@@ -1,4 +1,3 @@
-use semver::Version;
 use std::{collections::HashMap, fs, path::Path, path::PathBuf};
 use std::error::Error as StdError;
 
@@ -287,16 +286,8 @@ pub fn dedup_libs(libs: &Vec<String>) -> Result<Vec<&String>, Box<dyn StdError>>
             parts.next().ok_or(Error::new(err.as_str()))?
         );
 
-        let ver = Version::parse(sversion);
-
-        // various libraries have oddball versions that don't follow semver
-        // lets hope they are not the ones that show up in duplicate
-        if ver.is_err() {
-            lib_map.insert(artifact_id, (Version::new(9, 9, 9), path));
-            continue;
-        }
-
-        let version = ver.unwrap();
+        let version = lenient_semver::parse(sversion)
+            .map_err(|e| Error::new(format!("{}", e).as_str()))?;
 
         if let Some((existing_version, _)) = lib_map.get(artifact_id) {
             if *existing_version < version {
@@ -328,5 +319,15 @@ mod tests {
         let input = vec!["a/b/45.1.2/b-45.1.2.jar".to_string(), "a/b/45.1.16/b-45.1.16.jar".to_string()];
         let result: Vec<_> = dedup_libs(&input).unwrap();
         assert_eq!(result, vec!["a/b/45.1.16/b-45.1.16.jar"]);
+    }
+
+    #[test]
+    fn dedup_libs_wacky_ver() {
+        let input = vec![
+            "net/minecraftforge/forge/1.7.10-10.13.4.1566-1.7.10/forge-1.7.10-10.13.4.1566-1.7.10-universal.jar".to_string(),
+            "net/minecraftforge/forge/1.7.10-10.13.4.1614-1.7.10/forge-1.7.10-10.13.4.1614-1.7.10-universal.jar".to_string()
+        ];
+        let result: Vec<_> = dedup_libs(&input).unwrap();
+        assert_eq!(result, vec!["net/minecraftforge/forge/1.7.10-10.13.4.1614-1.7.10/forge-1.7.10-10.13.4.1614-1.7.10-universal.jar"]);
     }
 }
