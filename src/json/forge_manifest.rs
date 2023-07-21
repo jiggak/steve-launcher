@@ -63,7 +63,7 @@ impl ForgeLibrary {
 pub fn name_to_path(name: &str) -> Result<String, Error> {
     let mut parts = name.split(":");
 
-    let err = format!("Unexpected library name '{}' to contain", name);
+    let err = format!("Unexpected library name '{}'", name);
 
     let (group_id, artifact_id, version, classifier) = (
         parts.next().ok_or(Error::new(err.as_str()))?,

@@ -1,4 +1,5 @@
-use std::{fs, path::Path, path::PathBuf};
+use semver::Version;
+use std::{collections::HashMap, fs, path::Path, path::PathBuf};
 use std::error::Error as StdError;
 
 use crate::{env, Error, commands::Progress, asset_client::AssetClient};
@@ -41,10 +42,6 @@ impl AssetManager {
 
     pub fn virtual_assets_dir(&self, asset_index_id: &str) -> PathBuf {
         self.assets_dir.join("virtual").join(asset_index_id)
-    }
-
-    pub fn get_client_jar_path(mc_version: &str) -> String {
-        format!("com/mojang/minecraft/{mc_version}/minecraft-{mc_version}-client.jar")
     }
 
     pub async fn get_game_manifest(&self, mc_version: &str) -> Result<GameManifest, Box<dyn StdError>> {
@@ -140,7 +137,7 @@ impl AssetManager {
         let client = game_manifest.downloads.get("client")
             .ok_or(Error::new("Missing 'client' key in downloads object"))?;
 
-        let client_path = Self::get_client_jar_path(&game_manifest.id);
+        let client_path = get_client_jar_path(&game_manifest.id);
         let mut lib_downloads: Vec<(&str, &String)> = vec![
             (client_path.as_str(), &client.url)
         ];
@@ -269,5 +266,67 @@ impl AssetManager {
         progress.end();
 
         Ok(())
+    }
+}
+
+pub fn get_client_jar_path(mc_version: &str) -> String {
+    format!("com/mojang/minecraft/{mc_version}/minecraft-{mc_version}-client.jar")
+}
+
+pub fn dedup_libs(libs: &Vec<String>) -> Result<Vec<&String>, Box<dyn StdError>> {
+    let mut lib_map = HashMap::new();
+
+    for path in libs {
+        let mut parts = path.rsplitn(3, "/");
+
+        let err = format!("Unexpected library path '{}'", path);
+
+        let (_, sversion, artifact_id) = (
+            parts.next().ok_or(Error::new(err.as_str()))?,
+            parts.next().ok_or(Error::new(err.as_str()))?,
+            parts.next().ok_or(Error::new(err.as_str()))?
+        );
+
+        let ver = Version::parse(sversion);
+
+        // various libraries have oddball versions that don't follow semver
+        // lets hope they are not the ones that show up in duplicate
+        if ver.is_err() {
+            lib_map.insert(artifact_id, (Version::new(9, 9, 9), path));
+            continue;
+        }
+
+        let version = ver.unwrap();
+
+        if let Some((existing_version, _)) = lib_map.get(artifact_id) {
+            if *existing_version < version {
+                lib_map.insert(artifact_id, (version, path));
+            }
+        } else {
+            lib_map.insert(artifact_id, (version, path));
+        }
+    }
+
+    Ok(lib_map.values()
+        .map(|(_, path)| *path)
+        .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dedup_libs_simple() {
+        let input = vec!["a/b/1.2.3/b-1.2.3.jar".to_string(), "a/b/1.2.4/b-1.2.4.jar".to_string()];
+        let result: Vec<_> = dedup_libs(&input).unwrap();
+        assert_eq!(result, vec!["a/b/1.2.4/b-1.2.4.jar"]);
+    }
+
+    #[test]
+    fn dedup_libs_semver_order() {
+        let input = vec!["a/b/45.1.2/b-45.1.2.jar".to_string(), "a/b/45.1.16/b-45.1.16.jar".to_string()];
+        let result: Vec<_> = dedup_libs(&input).unwrap();
+        assert_eq!(result, vec!["a/b/45.1.16/b-45.1.16.jar"]);
     }
 }

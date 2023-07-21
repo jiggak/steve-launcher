@@ -1,7 +1,7 @@
 use std::error::Error as StdError;
 use std::{fs, path::Path, process::Command, collections::HashMap};
 
-use crate::{asset_manager::AssetManager, env};
+use crate::{asset_manager, asset_manager::AssetManager, env};
 use super::{account::Account, instance::Instance, Progress};
 
 
@@ -86,7 +86,7 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
     }
 
     let mut libs = vec![
-        AssetManager::get_client_jar_path(&game_manifest.id)
+        asset_manager::get_client_jar_path(&game_manifest.id)
     ];
 
     libs.extend(
@@ -104,7 +104,8 @@ pub async fn launch_instance(instance_dir: &Path, progress: &mut dyn Progress) -
     }
 
     let classpath = std::env::join_paths(
-        libs.iter().map(|p| env::get_libs_dir().join(p))
+        asset_manager::dedup_libs(&libs)?.iter()
+            .map(|p| env::get_libs_dir().join(p))
     )?.into_string().unwrap();
 
     let game_dir = instance.game_dir();
