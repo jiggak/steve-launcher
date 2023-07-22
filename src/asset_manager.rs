@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fs, path::Path, path::PathBuf};
 use std::error::Error as StdError;
 
-use crate::{env, Error, commands::Progress, asset_client::AssetClient};
+use crate::{asset_client::AssetClient, env, Error, Progress};
 use crate::json::{AssetManifest, GameManifest, ForgeManifest};
 
 pub struct AssetManager {

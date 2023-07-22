@@ -4,7 +4,7 @@ use dialoguer::Select;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
 use cli::{Parser, Cli, Commands};
-use steve::commands::{Progress, create_instance, get_forge_versions, launch_instance, login};
+use steve::{Account, AssetClient, Instance, Progress};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -27,22 +27,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 None
             };
 
-            create_instance(&instance_dir, &mc_version, forge_version).await
+            Instance::create(&instance_dir, &mc_version, forge_version)
+                .await.map(|_| ())
         },
         Commands::Launch { dir } => {
             let mut progress = ProgressHandler::new();
-            launch_instance(&dir, &mut progress).await
+
+            let instance = Instance::load(&dir)?;
+            instance.launch(&mut progress)
+                .await.map(|_| ())
         },
         Commands::Auth => {
-            login(|url, code| {
+            Account::login(|url, code| {
                 println!("Open the URL in your browser and enter the code: {code}\n\t{url}");
-            }).await
+            }).await.map(|_| ())
         }
     }
 }
 
 async fn prompt_forge_version(mc_version: &String) -> Result<String, Box<dyn std::error::Error>> {
-    let versions = get_forge_versions(mc_version).await?;
+    let client = AssetClient::new();
+
+    let versions = client.get_forge_versions(mc_version).await?;
 
     let recommend_index = versions.iter()
         .position(|v| v.recommended)
