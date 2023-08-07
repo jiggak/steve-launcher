@@ -215,6 +215,7 @@ async fn get_profile(mc_access_token: &str) -> Result<MinecraftProfile, Box<dyn 
         .get("https://api.minecraftservices.com/minecraft/profile")
         .bearer_auth(mc_access_token)
         .send().await?
+        .error_for_status()?
         .json::<MinecraftProfile>().await?)
 }
 

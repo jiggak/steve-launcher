@@ -1,3 +1,4 @@
+use semver::Version;
 use std::{collections::HashMap, fs, path::Path, path::PathBuf};
 use std::error::Error as StdError;
 
@@ -122,8 +123,6 @@ impl AssetManager {
             return Ok(());
         }
 
-        fs::create_dir_all(object_file.parent().unwrap())?;
-
         let url = format!("https://resources.download.minecraft.net/{hash_prefix}/{hash}");
 
         self.client.download_file(&url, &object_file).await
@@ -212,8 +211,6 @@ impl AssetManager {
             return Ok(());
         }
 
-        fs::create_dir_all(lib_file.parent().unwrap())?;
-
         self.client.download_file(url, &lib_file).await
     }
 
@@ -275,7 +272,15 @@ pub fn get_client_jar_path(mc_version: &str) -> String {
 pub fn dedup_libs(libs: &Vec<String>) -> Result<Vec<&String>, Box<dyn StdError>> {
     let mut lib_map = HashMap::new();
 
-    for path in libs {
+    // native jars have the same artifact path and version as their
+    // companion jar and will get incorrectly removed in the dedup process
+    // this naive approach splits natives jars, assuming these jars will always
+    // have the substring "natives" in the path, and includes them after the
+    // dedup process is complete
+    let (natives, non_natives): (Vec<_>, Vec<_>) = libs.iter()
+        .partition(|l| l.contains("natives"));
+
+    for path in non_natives {
         let mut parts = path.rsplitn(3, "/");
 
         let err = format!("Unexpected library path '{}'", path);
@@ -286,8 +291,16 @@ pub fn dedup_libs(libs: &Vec<String>) -> Result<Vec<&String>, Box<dyn StdError>>
             parts.next().ok_or(Error::new(err.as_str()))?
         );
 
-        let version = lenient_semver::parse(sversion)
-            .map_err(|e| Error::new(format!("{}", e).as_str()))?;
+        // some paths don't have a valid version
+        // e.g. "mmc2" -> io/github/zekerzhayard/ForgeWrapper/mmc2/ForgeWrapper-mmc2.jar
+        // for these, lets invent some meaningless version instead of crashing
+        // fingers crossed these types of libs will never have duplicates
+        let version = lenient_semver::parse(sversion);
+        let version = if version.is_err() {
+            Version::new(9, 9, 9)
+        } else {
+            version.unwrap()
+        };
 
         if let Some((existing_version, _)) = lib_map.get(artifact_id) {
             if *existing_version < version {
@@ -300,6 +313,7 @@ pub fn dedup_libs(libs: &Vec<String>) -> Result<Vec<&String>, Box<dyn StdError>>
 
     Ok(lib_map.values()
         .map(|(_, path)| *path)
+        .chain(natives)
         .collect())
 }
 
@@ -329,5 +343,25 @@ mod tests {
         ];
         let result: Vec<_> = dedup_libs(&input).unwrap();
         assert_eq!(result, vec!["net/minecraftforge/forge/1.7.10-10.13.4.1614-1.7.10/forge-1.7.10-10.13.4.1614-1.7.10-universal.jar"]);
+    }
+
+    #[test]
+    fn dedup_keep_natives() {
+        let input = vec![
+            "org/lwjgl/lwjgl/3.3.1/lwjgl-3.3.1.jar".to_string(),
+            "org/lwjgl/lwjgl/3.3.1/lwjgl-3.3.1-natives-linux.jar".to_string()
+        ];
+        let result: Vec<_> = dedup_libs(&input).unwrap();
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn dedup_invalid_version() {
+        let input = vec![
+            "io/github/zekerzhayard/ForgeWrapper/mmc2/ForgeWrapper-mmc2.jar".to_string(),
+            "org/ow2/asm/asm/9.5/asm-9.5.jar".to_string()
+        ];
+        let result: Vec<_> = dedup_libs(&input).unwrap();
+        assert_eq!(result.len(), 2);
     }
 }

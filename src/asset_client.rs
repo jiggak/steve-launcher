@@ -26,6 +26,8 @@ impl AssetClient {
     }
 
     pub async fn download_file(&self, url: &str, file_path: &Path) -> Result<(), Box<dyn StdError>> {
+        fs::create_dir_all(file_path.parent().unwrap())?;
+
         let mut stream = self.client.get(url)
             .send().await?
             .error_for_status()?
