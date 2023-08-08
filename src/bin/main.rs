@@ -1,5 +1,7 @@
 mod cli;
 
+use std::{path::Path, path::PathBuf};
+
 use dialoguer::Select;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
@@ -12,10 +14,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match cli.command {
         Commands::Create { dir, mc_version, forge } => {
-            let instance_dir = match dir.is_absolute() {
-                false => std::env::current_dir()?.join(dir),
-                true => dir
-            };
+            let instance_dir = absolute_path(&dir)?;
 
             let forge_version = if let Some(forge_version) = forge {
                 if forge_version == "prompt" {
@@ -41,8 +40,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Account::login(|url, code| {
                 println!("Open the URL in your browser and enter the code: {code}\n\t{url}");
             }).await.map(|_| ())
+        },
+        Commands::Import { dir, zip_file } => {
+            let mut progress = ProgressHandler::new();
+
+            let instance_dir = absolute_path(&dir)?;
+
+            Instance::create_from_zip(
+                &instance_dir,
+                &zip_file,
+                &mut progress
+            ).await.map(|_| ())
         }
     }
+}
+
+fn absolute_path(path: &Path) -> std::io::Result<PathBuf> {
+    Ok(if !path.is_absolute() {
+        std::env::current_dir()?.join(path)
+    } else {
+        path.to_owned()
+    })
 }
 
 async fn prompt_forge_version(mc_version: &String) -> Result<String, Box<dyn std::error::Error>> {

@@ -31,5 +31,14 @@ pub enum Commands {
     },
 
     /// Authenticate with your Microsoft account and save account details
-    Auth
+    Auth,
+
+    /// Create instance from CurseForge modpack zip file
+    Import {
+        /// Path to directory of new instance
+        dir: PathBuf,
+
+        /// Path to CurseForge modpack zip
+        zip_file: PathBuf
+    }
 }

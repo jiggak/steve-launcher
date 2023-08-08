@@ -48,3 +48,21 @@ pub fn get_msa_client_id() -> String {
     env::var("MSA_CLIENT_ID")
         .expect("MSA_CLIENT_ID env var not found")
 }
+
+pub fn get_curse_api_key() -> String {
+    env::var("CURSE_API_KEY")
+        .expect("CURSE_API_KEY env var not found")
+}
+
+pub fn get_downloads_dir() -> PathBuf {
+    match env::var("XDG_DOWNLOAD_DIR") {
+        Ok(var) => PathBuf::from(var),
+        Err(_) => {
+            let home_dir = env::var("HOME")
+                .expect("HOME env var not found");
+
+            PathBuf::from(home_dir).join("Downloads")
+        }
+    }
+}
+

@@ -1,14 +1,19 @@
 use futures_util::StreamExt;
 use semver::Version;
 use std::error::Error as StdError;
-use std::{io, fs::File, path::Path};
+use std::{collections::HashMap, io, fs, fs::File, path::Path};
 use reqwest::Client;
 
-use crate::Error;
-use crate::json::{AssetManifest, VersionManifest, ForgeVersionManifest};
+use crate::{env, Error};
+use crate::json::{
+    AssetManifest, ForgeVersionManifest, VersionManifest,
+    CurseForgeResponse, CurseForgeFile, CurseForgeMod
+};
 
 const VERSION_MANIFEST_URL: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 const FORGE_INDEX_URL: &str = "https://meta.prismlauncher.org/v1/net.minecraftforge/index.json";
+const CURSE_MOD_FILES_URL: &str = "https://api.curseforge.com/v1/mods/files";
+const CURSE_MODS_URL: &str = "https://api.curseforge.com/v1/mods";
 
 pub struct AssetClient {
     client: Client
@@ -81,6 +86,28 @@ impl AssetClient {
         versions.sort_by(|a, b| b.version.cmp(&a.version));
 
         Ok(versions)
+    }
+
+    pub async fn get_curseforge_file_list(&self, file_ids: &Vec<u64>) -> Result<Vec<CurseForgeFile>, Box<dyn StdError>> {
+        let response = self.client.post(CURSE_MOD_FILES_URL)
+            .header("x-api-key", env::get_curse_api_key())
+            .json(&HashMap::from([("fileIds", file_ids)]))
+            .send().await?
+            .error_for_status()?
+            .json::<CurseForgeResponse<CurseForgeFile>>().await?;
+
+        Ok(response.data)
+    }
+
+    pub async fn get_curseforge_mods(&self, mod_ids: &Vec<u64>) -> Result<Vec<CurseForgeMod>, Box<dyn StdError>> {
+        let response = self.client.post(CURSE_MODS_URL)
+            .header("x-api-key", env::get_curse_api_key())
+            .json(&HashMap::from([("modIds", mod_ids)]))
+            .send().await?
+            .error_for_status()?
+            .json::<CurseForgeResponse<CurseForgeMod>>().await?;
+
+        Ok(response.data)
     }
 }
 

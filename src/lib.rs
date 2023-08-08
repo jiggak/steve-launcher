@@ -1,6 +1,7 @@
 mod account;
 mod asset_client;
 mod asset_manager;
+mod download_watcher;
 mod env;
 mod instance;
 mod json;

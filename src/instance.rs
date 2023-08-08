@@ -1,9 +1,12 @@
-use std::error::Error as StdError;
-use std::{collections::HashMap, fs, path::Path, path::PathBuf, process::Child, process::Command};
+use std::{
+    collections::HashMap, error::Error as StdError, fs, fs::File,
+    path::Path, path::PathBuf, process::Child, process::Command
+};
 
 use crate::{
     account::Account, asset_manager, asset_manager::AssetManager, env,
-    json::InstanceManifest, Progress
+    json::CurseForgePack, json::InstanceManifest, Progress,
+    download_watcher::DownloadWatcher
 };
 
 const MANIFEST_FILE: &str = "manifest.json";
@@ -59,6 +62,84 @@ impl Instance {
         Ok(instance)
     }
 
+    pub async fn create_from_zip(instance_dir: &Path, zip_path: &Path, progress: &mut dyn Progress) -> Result<Instance, Box<dyn StdError>> {
+        // extract zip to temp dir
+        let zip_temp_dir = std::env::temp_dir().join("foo");
+        zip_extract::extract(File::open(zip_path)?, &zip_temp_dir, false)?;
+
+        // read modpack manifest
+        let manifest: CurseForgePack = serde_json::from_reader(
+            File::open(zip_temp_dir.join("manifest.json"))?
+        )?;
+
+        // create instance from manifest
+        let instance = Self::create(
+            instance_dir,
+            &manifest.minecraft.version,
+            manifest.minecraft.get_forge_version()
+        ).await?;
+
+        fs::create_dir(instance.game_dir())?;
+
+        // copy game data from zip to instance
+        copy_dir_all(zip_temp_dir.join(&manifest.overrides), instance.game_dir())?;
+
+        // done with the zip contents, delete it
+        fs::remove_dir_all(zip_temp_dir)?;
+
+        // download mods
+        let client = crate::asset_client::AssetClient::new();
+        let file_ids = manifest.get_file_ids();
+        let file_list = client.get_curseforge_file_list(&file_ids).await?;
+
+        // filter files with download URL
+        let (downloads, blocked): (Vec<_>, Vec<_>) = file_list.iter()
+            .partition(|f| f.download_url.is_some());
+
+        progress.begin("Downloading mods...", downloads.len());
+
+        for (i, f) in downloads.iter().enumerate() {
+            let mod_file_path = instance.mods_dir().join(&f.file_name);
+
+            progress.advance(i + 1);
+            client.download_file(&f.download_url.as_ref().unwrap(), &mod_file_path).await?;
+        }
+
+        progress.end();
+
+        if !blocked.is_empty() {
+            let mod_ids = blocked.iter()
+                .map(|f| f.mod_id)
+                .collect();
+
+            // get "mod slug" for each blocked file to build download URLs
+            let mods = client.get_curseforge_mods(&mod_ids).await?;
+
+            let urls: Vec<_> = blocked.iter()
+                .map(|f| {
+                    let mod_detail = mods.iter().find(|m| m.mod_id == f.mod_id).unwrap();
+
+                    format!("https://www.curseforge.com/minecraft/mc-mods/{slug}/download/{file_id}",
+                            slug = mod_detail.slug, file_id = f.file_id)
+                }).collect();
+
+            for f in urls {
+                println!("{}", f);
+            }
+
+            let watcher = DownloadWatcher::new(blocked.iter().map(|f| f.file_name.as_str()));
+
+            watcher.begin_watching(|file_path| {
+                fs::copy(file_path, instance.mods_dir().join(file_path.file_name().unwrap()))?;
+                Ok(())
+            })?;
+
+            // send callback to cli app with list of URLs to open
+        }
+
+        Ok(instance)
+    }
+
     pub fn load(instance_dir: &Path) -> Result<Instance, Box<dyn StdError>> {
         let manifest_path = instance_dir.join(MANIFEST_FILE);
         let json = fs::read_to_string(manifest_path)?;
@@ -69,6 +150,10 @@ impl Instance {
 
     pub fn game_dir(&self) -> PathBuf {
         self.dir.join(&self.manifest.game_dir)
+    }
+
+    pub fn mods_dir(&self) -> PathBuf {
+        self.game_dir().join("mods")
     }
 
     pub fn resources_dir(&self) -> PathBuf {
@@ -220,4 +305,18 @@ impl Instance {
 
         Ok(cmd.spawn()?)
     }
+}
+
+fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
+    fs::create_dir_all(&dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        } else {
+            fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        }
+    }
+    Ok(())
 }
