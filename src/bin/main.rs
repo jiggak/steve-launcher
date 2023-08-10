@@ -49,7 +49,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Instance::create_from_zip(
                 &instance_dir,
                 &zip_file,
-                &mut progress
+                &mut progress,
+                |downloads| {
+                    for d in downloads {
+                        println!("{}", d.url);
+                    }
+                }
             ).await.map(|_| ())
         }
     }

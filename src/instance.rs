@@ -4,9 +4,9 @@ use std::{
 };
 
 use crate::{
-    account::Account, asset_manager, asset_manager::AssetManager, env,
-    json::CurseForgePack, json::InstanceManifest, Progress,
-    download_watcher::DownloadWatcher
+    account::Account, asset_manager::{self, AssetManager}, env,
+    json::{CurseForgePack, InstanceManifest}, Progress,
+    download_watcher::{DownloadWatcher, DownloadState}
 };
 
 const MANIFEST_FILE: &str = "manifest.json";
@@ -62,7 +62,12 @@ impl Instance {
         Ok(instance)
     }
 
-    pub async fn create_from_zip(instance_dir: &Path, zip_path: &Path, progress: &mut dyn Progress) -> Result<Instance, Box<dyn StdError>> {
+    pub async fn create_from_zip(
+        instance_dir: &Path,
+        zip_path: &Path,
+        progress: &mut dyn Progress,
+        callback: fn(&Vec<DownloadState>)
+    ) -> Result<Instance, Box<dyn StdError>> {
         // extract zip to temp dir
         let zip_temp_dir = std::env::temp_dir().join("foo");
         zip_extract::extract(File::open(zip_path)?, &zip_temp_dir, false)?;
@@ -115,26 +120,24 @@ impl Instance {
             // get "mod slug" for each blocked file to build download URLs
             let mods = client.get_curseforge_mods(&mod_ids).await?;
 
-            let urls: Vec<_> = blocked.iter()
-                .map(|f| {
+            let watcher = DownloadWatcher::new(
+                blocked.iter().map(|f| {
                     let mod_detail = mods.iter().find(|m| m.mod_id == f.mod_id).unwrap();
 
-                    format!("https://www.curseforge.com/minecraft/mc-mods/{slug}/download/{file_id}",
-                            slug = mod_detail.slug, file_id = f.file_id)
-                }).collect();
+                    let url = format!("https://www.curseforge.com/minecraft/mc-mods/{slug}/download/{file_id}",
+                        slug = mod_detail.slug, file_id = f.file_id);
 
-            for f in urls {
-                println!("{}", f);
-            }
+                    DownloadState::new(f.file_name.clone(), url)
+                })
+            );
 
-            let watcher = DownloadWatcher::new(blocked.iter().map(|f| f.file_name.as_str()));
+            callback(&watcher.state);
 
-            watcher.begin_watching(|file_path| {
+            watcher.begin_watching(|watcher, file_path| {
                 fs::copy(file_path, instance.mods_dir().join(file_path.file_name().unwrap()))?;
+                callback(&watcher.state);
                 Ok(())
             })?;
-
-            // send callback to cli app with list of URLs to open
         }
 
         Ok(instance)
