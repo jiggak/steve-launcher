@@ -12,7 +12,9 @@ use std::error::Error as StdError;
 pub use {
     account::Account,
     asset_client::AssetClient,
-    instance::Instance
+    download_watcher::DownloadWatcher,
+    instance::Instance,
+    instance::FileDownload
 };
 
 

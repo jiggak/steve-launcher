@@ -1,34 +1,34 @@
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
-use std::{fs, path::{Path, PathBuf}};
+use std::{collections::HashMap, fs, io::Result as IoResult, path::{Path, PathBuf}};
 
 use crate::env;
 
 pub struct DownloadWatcher {
     watch_dir: PathBuf,
-    pub state: Vec<DownloadState>
+    file_state: HashMap<String, bool>
 }
 
-impl DownloadWatcher {
-    pub fn new<I>(files: I) -> Self
-        where I: Iterator<Item = DownloadState>
+impl<'a> DownloadWatcher {
+    pub fn new<I>(files: I) -> IoResult<Self>
+        where I: Iterator<Item = &'a str>
     {
-        DownloadWatcher {
+        let mut watcher = DownloadWatcher {
             watch_dir: env::get_downloads_dir(),
-            state: files.collect()
+            file_state: files
+                .map(|f| (f.to_string(), false))
+                .collect()
+        };
+
+        for f in fs::read_dir(&watcher.watch_dir)? {
+            watcher.on_file_complete(&f?.path())?;
         }
+
+        Ok(watcher)
     }
 
     pub fn begin_watching(mut self,
-        file_ready: impl Fn(&DownloadWatcher, &Path) -> std::io::Result<()>
+        file_ready: impl Fn(&DownloadWatcher, &Path) -> IoResult<()>
     ) -> notify::Result<()> {
-        for f in fs::read_dir(&self.watch_dir)? {
-            self.check_file_complete(&f?.path(), &file_ready)?;
-        }
-
-        if self.is_complete() {
-            return Ok(());
-        }
-
         let (tx, rx) = std::sync::mpsc::channel();
 
         let mut watcher = RecommendedWatcher::new(tx, Config::default())?;
@@ -41,10 +41,12 @@ impl DownloadWatcher {
             // println!("event: {:?}", event);
 
             for path in event.paths {
-                self.check_file_complete(&path, &file_ready)?;
+                if self.on_file_complete(&path)? {
+                    file_ready(&self, &path)?;
+                }
             }
 
-            if self.is_complete() {
+            if self.is_all_complete() {
                 watcher.unwatch(&self.watch_dir)?;
                 break;
             }
@@ -53,35 +55,27 @@ impl DownloadWatcher {
         Ok(())
     }
 
-    fn check_file_complete(
-        &mut self, path: &PathBuf,
-        file_ready: impl Fn(&DownloadWatcher, &Path) -> std::io::Result<()>
-    ) -> std::io::Result<()> {
+    fn on_file_complete(&mut self, path: &PathBuf) -> IoResult<bool> {
         let path_file_name = path.file_name()
             .and_then(|p| p.to_str())
             .unwrap();
 
-        if let Some(file) = self.state.iter_mut().find(|f| f.file_name == path_file_name).as_mut() {
-            file.complete = true;
-            file_ready(&self, &path)?;
+        if let Some(status) = self.file_state.get_mut(path_file_name) {
+            *status = true;
+            Ok(true)
+        } else {
+            Ok(false)
         }
-
-        Ok(())
     }
 
-    fn is_complete(&self) -> bool {
-        self.state.iter().all(|f| f.complete)
+    pub fn is_file_complete(&self, file_name: &String) -> bool {
+        match self.file_state.get(file_name) {
+            Some(v) => *v,
+            None => false
+        }
     }
-}
 
-pub struct DownloadState {
-    pub file_name: String,
-    pub url: String,
-    pub complete: bool
-}
-
-impl DownloadState {
-    pub fn new(file_name: String, url: String) -> Self {
-        DownloadState { file_name, url, complete: false }
+    pub fn is_all_complete(&self) -> bool {
+        self.file_state.values().all(|v| *v)
     }
 }

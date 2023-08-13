@@ -1,12 +1,13 @@
 mod cli;
 
-use std::{path::Path, path::PathBuf};
+use std::{fs, io, path::Path, path::PathBuf};
 
+use console::Term;
 use dialoguer::Select;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
 use cli::{Parser, Cli, Commands};
-use steve::{Account, AssetClient, Instance, Progress};
+use steve::{Account, AssetClient, FileDownload, Instance, Progress, DownloadWatcher};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -46,16 +47,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let instance_dir = absolute_path(&dir)?;
 
-            Instance::create_from_zip(
+            let (instance, downloads) = Instance::create_from_zip(
                 &instance_dir,
                 &zip_file,
-                &mut progress,
-                |downloads| {
-                    for d in downloads {
-                        println!("{}", d.url);
-                    }
+                &mut progress
+            ).await?;
+
+            if let Some(downloads) = downloads {
+                let watcher = DownloadWatcher::new(
+                    downloads.iter()
+                        .map(|f| f.file_name.as_str())
+                )?;
+
+                if watcher.is_all_complete() {
+                    return Ok(());
                 }
-            ).await.map(|_| ())
+
+                print_download_state(&watcher, &downloads)?;
+
+                watcher.begin_watching(|watcher, file_path| {
+                    fs::copy(file_path, instance.mods_dir().join(file_path.file_name().unwrap()))?;
+                    print_download_state(&watcher, &downloads)?;
+                    Ok(())
+                })?;
+
+                Term::stdout().clear_last_lines(downloads.len())?;
+            }
+
+            Ok(())
         }
     }
 }
@@ -91,6 +110,24 @@ async fn prompt_forge_version(mc_version: &String) -> Result<String, Box<dyn std
         .interact()?;
 
     Ok(versions[selection].version.to_string())
+}
+
+fn print_download_state(watcher: &DownloadWatcher, downloads: &Vec<FileDownload>) -> io::Result<()> {
+    let term = Term::stdout();
+
+    for x in downloads {
+        let status = match watcher.is_file_complete(&x.file_name) {
+            true => "✅", false => "❌"
+        };
+
+        term.write_line(
+            format!("{status} {url}", url = x.url).as_str()
+        )?;
+    }
+
+    term.move_cursor_up(downloads.len())?;
+
+    Ok(())
 }
 
 struct ProgressHandler {

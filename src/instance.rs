@@ -5,8 +5,7 @@ use std::{
 
 use crate::{
     account::Account, asset_manager::{self, AssetManager}, env,
-    json::{CurseForgePack, InstanceManifest}, Progress,
-    download_watcher::{DownloadWatcher, DownloadState}
+    json::{CurseForgePack, InstanceManifest}, Progress
 };
 
 const MANIFEST_FILE: &str = "manifest.json";
@@ -65,9 +64,8 @@ impl Instance {
     pub async fn create_from_zip(
         instance_dir: &Path,
         zip_path: &Path,
-        progress: &mut dyn Progress,
-        callback: fn(&Vec<DownloadState>)
-    ) -> Result<Instance, Box<dyn StdError>> {
+        progress: &mut dyn Progress
+    ) -> Result<(Instance, Option<Vec<FileDownload>>), Box<dyn StdError>> {
         // extract zip to temp dir
         let zip_temp_dir = std::env::temp_dir().join("foo");
         zip_extract::extract(File::open(zip_path)?, &zip_temp_dir, false)?;
@@ -117,30 +115,22 @@ impl Instance {
                 .map(|f| f.mod_id)
                 .collect();
 
-            // get "mod slug" for each blocked file to build download URLs
+            // get details for each blocked file to build download URLs
             let mods = client.get_curseforge_mods(&mod_ids).await?;
 
-            let watcher = DownloadWatcher::new(
-                blocked.iter().map(|f| {
-                    let mod_detail = mods.iter().find(|m| m.mod_id == f.mod_id).unwrap();
+            let downloads = blocked.iter().map(|f| {
+                let mod_detail = mods.iter().find(|m| m.mod_id == f.mod_id).unwrap();
 
-                    let url = format!("https://www.curseforge.com/minecraft/mc-mods/{slug}/download/{file_id}",
-                        slug = mod_detail.slug, file_id = f.file_id);
+                let url = format!("{site_url}/download/{file_id}",
+                    site_url = mod_detail.links.website_url, file_id = f.file_id);
 
-                    DownloadState::new(f.file_name.clone(), url)
-                })
-            );
+                FileDownload::new(f.file_name.clone(), url)
+            }).collect();
 
-            callback(&watcher.state);
-
-            watcher.begin_watching(|watcher, file_path| {
-                fs::copy(file_path, instance.mods_dir().join(file_path.file_name().unwrap()))?;
-                callback(&watcher.state);
-                Ok(())
-            })?;
+            Ok((instance, Some(downloads)))
+        } else {
+            Ok((instance, None))
         }
-
-        Ok(instance)
     }
 
     pub fn load(instance_dir: &Path) -> Result<Instance, Box<dyn StdError>> {
@@ -322,4 +312,15 @@ fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result
         }
     }
     Ok(())
+}
+
+pub struct FileDownload {
+    pub file_name: String,
+    pub url: String
+}
+
+impl FileDownload {
+    pub fn new(file_name: String, url: String) -> Self {
+        FileDownload { file_name, url }
+    }
 }

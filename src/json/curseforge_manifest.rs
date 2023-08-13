@@ -78,5 +78,18 @@ pub struct CurseForgeFile {
 pub struct CurseForgeMod {
     #[serde(rename(deserialize = "id"))]
     pub mod_id: u64,
-    pub slug: String
+    pub slug: String,
+    pub links: CurseForgeModLinks
+}
+
+#[derive(Deserialize)]
+pub struct CurseForgeModLinks {
+    #[serde(rename(deserialize = "websiteUrl"))]
+    pub website_url: String,
+    #[serde(rename(deserialize = "wikiUrl"))]
+    pub wiki_url: String,
+    #[serde(rename(deserialize = "issuesUrl"))]
+    pub issues_url: String,
+    #[serde(rename(deserialize = "sourceUrl"))]
+    pub source_url: String
 }
