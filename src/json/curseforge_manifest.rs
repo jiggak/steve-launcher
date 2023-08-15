@@ -87,9 +87,9 @@ pub struct CurseForgeModLinks {
     #[serde(rename(deserialize = "websiteUrl"))]
     pub website_url: String,
     #[serde(rename(deserialize = "wikiUrl"))]
-    pub wiki_url: String,
+    pub wiki_url: Option<String>,
     #[serde(rename(deserialize = "issuesUrl"))]
-    pub issues_url: String,
+    pub issues_url: Option<String>,
     #[serde(rename(deserialize = "sourceUrl"))]
-    pub source_url: String
+    pub source_url: Option<String>
 }

@@ -95,11 +95,14 @@ impl Instance {
         let file_ids = manifest.get_file_ids();
         let file_list = client.get_curseforge_file_list(&file_ids).await?;
 
-        // filter files with download URL
+        // filter files with download URL, and without (requires manual download)
         let (downloads, blocked): (Vec<_>, Vec<_>) = file_list.iter()
             .partition(|f| f.download_url.is_some());
 
         progress.begin("Downloading mods...", downloads.len());
+
+        // create mods dir in case there are zero automated downloads with one or more manual downloads
+        fs::create_dir_all(instance.mods_dir())?;
 
         for (i, f) in downloads.iter().enumerate() {
             let mod_file_path = instance.mods_dir().join(&f.file_name);

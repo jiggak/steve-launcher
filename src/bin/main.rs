@@ -1,6 +1,8 @@
 mod cli;
 
-use std::{fs, io, path::Path, path::PathBuf};
+use std::{
+    fs, io, path::Path, path::PathBuf, process::Command, process::Stdio, thread
+};
 
 use console::Term;
 use dialoguer::Select;
@@ -54,24 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ).await?;
 
             if let Some(downloads) = downloads {
-                let watcher = DownloadWatcher::new(
-                    downloads.iter()
-                        .map(|f| f.file_name.as_str())
-                )?;
-
-                if watcher.is_all_complete() {
-                    return Ok(());
-                }
-
-                print_download_state(&watcher, &downloads)?;
-
-                watcher.begin_watching(|watcher, file_path| {
-                    fs::copy(file_path, instance.mods_dir().join(file_path.file_name().unwrap()))?;
-                    print_download_state(&watcher, &downloads)?;
-                    Ok(())
-                })?;
-
-                Term::stdout().clear_last_lines(downloads.len())?;
+                download_blocked(instance, downloads)?;
             }
 
             Ok(())
@@ -112,9 +97,49 @@ async fn prompt_forge_version(mc_version: &String) -> Result<String, Box<dyn std
     Ok(versions[selection].version.to_string())
 }
 
-fn print_download_state(watcher: &DownloadWatcher, downloads: &Vec<FileDownload>) -> io::Result<()> {
-    let term = Term::stdout();
+fn download_blocked(instance: Instance, downloads: Vec<FileDownload>) -> io::Result<()> {
+    let watcher = DownloadWatcher::new(
+        downloads.iter()
+            .map(|f| f.file_name.as_str())
+    )?;
 
+    if watcher.is_all_complete() {
+        return Ok(());
+    }
+
+    let term = Term::stdout();
+    term.hide_cursor()?;
+
+    term.write_line("Files below must be downloaded manually. Press [o] to open all, [x] to quit.")?;
+
+    print_download_state(&term, &watcher, &downloads)?;
+
+    let mods_dir = instance.mods_dir();
+    let term_clone = term.clone();
+    let download_urls: Vec<_> = downloads.iter()
+        .filter_map(|d| match watcher.is_file_complete(&d.file_name) {
+            true => Some(d.url.clone()),
+            _ => None
+        })
+        .collect();
+
+    thread::spawn(move || {
+        watcher.begin_watching(|watcher, file_path| {
+            fs::copy(file_path, mods_dir.join(file_path.file_name().unwrap()))?;
+            print_download_state(&term_clone, &watcher, &downloads)?;
+            Ok(())
+        }).unwrap();
+    });
+
+    loop {
+        let ch = term.read_char()?;
+        if ch == 'o' {
+            open_urls(download_urls.iter())?;
+        }
+    }
+}
+
+fn print_download_state(term: &Term, watcher: &DownloadWatcher, downloads: &Vec<FileDownload>) -> io::Result<()> {
     for x in downloads {
         let status = match watcher.is_file_complete(&x.file_name) {
             true => "✅", false => "❌"
@@ -126,6 +151,20 @@ fn print_download_state(watcher: &DownloadWatcher, downloads: &Vec<FileDownload>
     }
 
     term.move_cursor_up(downloads.len())?;
+
+    Ok(())
+}
+
+fn open_urls<'a, T>(urls: T) -> io::Result<()>
+    where T: Iterator<Item = &'a String>
+{
+    for u in urls {
+        Command::new("xdg-open")
+            .arg(u)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()?;
+    }
 
     Ok(())
 }
