@@ -13,6 +13,7 @@ pub use {
     account::Account,
     asset_client::AssetClient,
     download_watcher::DownloadWatcher,
+    download_watcher::WatcherMessage,
     instance::Instance,
     instance::FileDownload
 };

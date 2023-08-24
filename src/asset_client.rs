@@ -96,7 +96,11 @@ impl AssetClient {
             .error_for_status()?
             .json::<CurseForgeResponse<CurseForgeFile>>().await?;
 
-        Ok(response.data)
+        // randomly curseforge returns duplicate entries, remove duplicates
+        let mut data = response.data;
+        data.dedup_by(|a, b| a.mod_id == b.mod_id);
+
+        Ok(data)
     }
 
     pub async fn get_curseforge_mods(&self, mod_ids: &Vec<u64>) -> Result<Vec<CurseForgeMod>, Box<dyn StdError>> {

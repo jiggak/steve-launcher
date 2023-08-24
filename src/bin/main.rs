@@ -1,7 +1,9 @@
 mod cli;
 
 use std::{
-    fs, io, path::Path, path::PathBuf, process::Command, process::Stdio, thread
+    error::Error as StdError, fs, io, path::Path, path::PathBuf, process::{Command, Stdio},
+    sync::{Arc, atomic::{AtomicBool, Ordering}, mpsc::{self, Sender}},
+    thread
 };
 
 use console::Term;
@@ -9,10 +11,13 @@ use dialoguer::Select;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
 use cli::{Parser, Cli, Commands};
-use steve::{Account, AssetClient, FileDownload, Instance, Progress, DownloadWatcher};
+use steve::{
+    Account, AssetClient, DownloadWatcher, FileDownload, Instance, WatcherMessage,
+    Progress
+};
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), Box<dyn StdError>> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -64,7 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-fn absolute_path(path: &Path) -> std::io::Result<PathBuf> {
+fn absolute_path(path: &Path) -> io::Result<PathBuf> {
     Ok(if !path.is_absolute() {
         std::env::current_dir()?.join(path)
     } else {
@@ -72,7 +77,7 @@ fn absolute_path(path: &Path) -> std::io::Result<PathBuf> {
     })
 }
 
-async fn prompt_forge_version(mc_version: &String) -> Result<String, Box<dyn std::error::Error>> {
+async fn prompt_forge_version(mc_version: &String) -> Result<String, Box<dyn StdError>> {
     let client = AssetClient::new();
 
     let versions = client.get_forge_versions(mc_version).await?;
@@ -97,11 +102,13 @@ async fn prompt_forge_version(mc_version: &String) -> Result<String, Box<dyn std
     Ok(versions[selection].version.to_string())
 }
 
-fn download_blocked(instance: Instance, downloads: Vec<FileDownload>) -> io::Result<()> {
+fn download_blocked(instance: Instance, downloads: Vec<FileDownload>) -> Result<(), Box<dyn StdError>> {
     let watcher = DownloadWatcher::new(
         downloads.iter()
             .map(|f| f.file_name.as_str())
-    )?;
+    );
+
+    // TODO copy any initially complete files to dest
 
     if watcher.is_all_complete() {
         return Ok(());
@@ -114,29 +121,55 @@ fn download_blocked(instance: Instance, downloads: Vec<FileDownload>) -> io::Res
 
     print_download_state(&term, &watcher, &downloads)?;
 
-    let mods_dir = instance.mods_dir();
-    let term_clone = term.clone();
-    let download_urls: Vec<_> = downloads.iter()
-        .filter_map(|d| match watcher.is_file_complete(&d.file_name) {
-            true => Some(d.url.clone()),
-            _ => None
-        })
-        .collect();
+    let (tx, rx) = mpsc::channel();
 
-    thread::spawn(move || {
-        watcher.begin_watching(|watcher, file_path| {
-            fs::copy(file_path, mods_dir.join(file_path.file_name().unwrap()))?;
-            print_download_state(&term_clone, &watcher, &downloads)?;
-            Ok(())
-        }).unwrap();
-    });
+    thread::scope(|scope| -> io::Result<()> {
+        let watch_cancel = watcher.watch(scope, tx.clone()).unwrap();
+        let readkey_cancel = readkey_thread(scope, term.clone(), tx);
 
-    loop {
-        let ch = term.read_char()?;
-        if ch == 'o' {
-            open_urls(download_urls.iter())?;
+        while let Ok(msg) = rx.recv() {
+            match msg {
+                WatcherMessage::FileComplete(file_path) => {
+                    // FIXME what about texture packs? they should not be copied to "mods" dir
+                    fs::copy(&file_path, instance.mods_dir().join(file_path.file_name().unwrap()))?;
+                    print_download_state(&term, &watcher, &downloads)?;
+                },
+                WatcherMessage::AllComplete => {
+                    break;
+                },
+                WatcherMessage::KeyPress(ch) => {
+                    match ch {
+                        'o' => {
+                            open_urls(
+                                downloads.iter()
+                                    .filter_map(|d| match watcher.is_file_complete(&d.file_name) {
+                                        false => Some(d.url.as_str()),
+                                        _ => None
+                                    })
+                            )?;
+                        },
+                        'x' => {
+                            break;
+                        },
+                        _ => { }
+                    }
+                },
+                WatcherMessage::Error(_) => {
+                    break;
+                }
+            }
         }
-    }
+
+        watch_cancel();
+        readkey_cancel();
+
+        term.clear_to_end_of_screen()?;
+        term.show_cursor()?;
+
+        Ok(())
+    })?;
+
+    Ok(())
 }
 
 fn print_download_state(term: &Term, watcher: &DownloadWatcher, downloads: &Vec<FileDownload>) -> io::Result<()> {
@@ -156,7 +189,7 @@ fn print_download_state(term: &Term, watcher: &DownloadWatcher, downloads: &Vec<
 }
 
 fn open_urls<'a, T>(urls: T) -> io::Result<()>
-    where T: Iterator<Item = &'a String>
+    where T: Iterator<Item = &'a str>
 {
     for u in urls {
         Command::new("xdg-open")
@@ -167,6 +200,24 @@ fn open_urls<'a, T>(urls: T) -> io::Result<()>
     }
 
     Ok(())
+}
+
+fn readkey_thread<'scope, 'env>(scope: &'scope thread::Scope<'scope, 'env>, term: Term, tx: Sender<WatcherMessage>) -> impl Fn() {
+    let stop = Arc::new(AtomicBool::new(false));
+
+    let stop_thread = stop.clone();
+    let exit_thread = move || stop.store(true, Ordering::Relaxed);
+
+    scope.spawn(move || -> io::Result<()> {
+        while !stop_thread.load(Ordering::Relaxed) {
+            let ch = term.read_char()?;
+            tx.send(WatcherMessage::KeyPress(ch)).unwrap();
+        }
+
+        Ok(())
+    });
+
+    exit_thread
 }
 
 struct ProgressHandler {
