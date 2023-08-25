@@ -25,9 +25,9 @@ pub struct Error {
 }
 
 impl Error {
-    pub fn new(reason: &str) -> Self {
+    pub fn new<S: Into<String>>(reason: S) -> Self {
         Error{
-            reason: String::from(reason)
+            reason: reason.into()
         }
     }
 }

@@ -1,7 +1,7 @@
 mod cli;
 
 use std::{
-    error::Error as StdError, fs, io, path::Path, path::PathBuf, process::{Command, Stdio},
+    error::Error as StdError, io, path::Path, path::PathBuf, process::{Command, Stdio},
     sync::{Arc, atomic::{AtomicBool, Ordering}, mpsc::{self, Sender}},
     thread
 };
@@ -108,7 +108,13 @@ fn download_blocked(instance: Instance, downloads: Vec<FileDownload>) -> Result<
             .map(|f| f.file_name.as_str())
     );
 
-    // TODO copy any initially complete files to dest
+    // copy any downloads already in watch dir
+    for f in &downloads {
+        if watcher.is_file_complete(&f.file_name) {
+            let file_path = watcher.watch_dir.join(&f.file_name);
+            instance.install_file(f, &file_path)?;
+        }
+    }
 
     if watcher.is_all_complete() {
         return Ok(());
@@ -130,8 +136,11 @@ fn download_blocked(instance: Instance, downloads: Vec<FileDownload>) -> Result<
         while let Ok(msg) = rx.recv() {
             match msg {
                 WatcherMessage::FileComplete(file_path) => {
-                    // FIXME what about texture packs? they should not be copied to "mods" dir
-                    fs::copy(&file_path, instance.mods_dir().join(file_path.file_name().unwrap()))?;
+                    let file_name = file_path.file_name().unwrap().to_string_lossy();
+                    let file = downloads.iter()
+                        .find(|d| d.file_name == file_name)
+                        .unwrap();
+                    instance.install_file(file, &file_path)?;
                     print_download_state(&term, &watcher, &downloads)?;
                 },
                 WatcherMessage::AllComplete => {

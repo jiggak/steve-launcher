@@ -125,7 +125,7 @@ impl ForgeVersion {
         Ok(ForgeVersion {
             recommended,
             version: lenient_semver::parse(version)
-                .map_err(|e| Error::new(format!("{}", e).as_str()))?
+                .map_err(|e| Error::new(format!("{}", e)))?
         })
     }
 }

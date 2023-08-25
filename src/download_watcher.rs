@@ -7,7 +7,7 @@ use std::{
 use crate::env;
 
 pub struct DownloadWatcher {
-    watch_dir: PathBuf,
+    pub watch_dir: PathBuf,
     file_state: Arc<Mutex<HashMap<String, bool>>>
 }
 

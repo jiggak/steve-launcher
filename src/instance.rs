@@ -4,8 +4,9 @@ use std::{
 };
 
 use crate::{
-    account::Account, asset_manager::{self, AssetManager}, env,
-    json::{CurseForgePack, InstanceManifest}, Progress
+    account::Account, asset_manager::{self, AssetManager}, env, Error,
+    json::{CurseForgeFile, CurseForgeMod, CurseForgePack, InstanceManifest},
+    Progress
 };
 
 const MANIFEST_FILE: &str = "manifest.json";
@@ -93,11 +94,25 @@ impl Instance {
         // download mods
         let client = crate::asset_client::AssetClient::new();
         let file_ids = manifest.get_file_ids();
-        let file_list = client.get_curseforge_file_list(&file_ids).await?;
+        let project_ids = manifest.get_project_ids();
 
-        // filter files with download URL, and without (requires manual download)
-        let (downloads, blocked): (Vec<_>, Vec<_>) = file_list.iter()
-            .partition(|f| f.download_url.is_some());
+        let mut file_list = client.get_curseforge_file_list(&file_ids).await?;
+        let mut mod_list = client.get_curseforge_mods(&project_ids).await?;
+
+        if file_list.len() != mod_list.len() {
+            let msg = format!("CurseForge file results({}) do not match mod results({})",
+                file_list.len(), mod_list.len());
+            return Err(Box::new(Error::new(msg)));
+        }
+
+        // sort the lists so that we can zip them into list of pairs
+        file_list.sort_by(|a, b| a.mod_id.cmp(&b.mod_id));
+        mod_list.sort_by(|a, b| a.mod_id.cmp(&b.mod_id));
+
+        // filter files that can be auto-downloaded, and those that must be manually downloaded
+        let (downloads, blocked): (Vec<_>, Vec<_>) = file_list.iter().zip(mod_list)
+            .map(|(f, m)| FileDownload::new(f, &m).unwrap())
+            .partition(|f| f.can_auto_download);
 
         progress.begin("Downloading mods...", downloads.len());
 
@@ -105,32 +120,22 @@ impl Instance {
         fs::create_dir_all(instance.mods_dir())?;
 
         for (i, f) in downloads.iter().enumerate() {
-            let mod_file_path = instance.mods_dir().join(&f.file_name);
-
             progress.advance(i + 1);
-            client.download_file(&f.download_url.as_ref().unwrap(), &mod_file_path).await?;
+
+            let dest_file_path = instance.get_file_path(f);
+
+            // save time/bandwidth and skip download if dest file exists
+            if dest_file_path.exists() {
+                continue;
+            }
+
+            client.download_file(&f.url, &dest_file_path).await?;
         }
 
         progress.end();
 
         if !blocked.is_empty() {
-            let mod_ids = blocked.iter()
-                .map(|f| f.mod_id)
-                .collect();
-
-            // get details for each blocked file to build download URLs
-            let mods = client.get_curseforge_mods(&mod_ids).await?;
-
-            let downloads = blocked.iter().map(|f| {
-                let mod_detail = mods.iter().find(|m| m.mod_id == f.mod_id).unwrap();
-
-                let url = format!("{site_url}/download/{file_id}",
-                    site_url = mod_detail.links.website_url, file_id = f.file_id);
-
-                FileDownload::new(f.file_name.clone(), url)
-            }).collect();
-
-            Ok((instance, Some(downloads)))
+            Ok((instance, Some(blocked)))
         } else {
             Ok((instance, None))
         }
@@ -156,8 +161,29 @@ impl Instance {
         self.game_dir().join("resources")
     }
 
+    pub fn resource_pack_dir(&self) -> PathBuf {
+        self.game_dir().join("resourcepacks")
+    }
+
     pub fn natives_dir(&self) -> PathBuf {
         self.dir.join("natives")
+    }
+
+    pub fn get_file_type_dir(&self, file_type: &FileType) -> PathBuf {
+        match file_type {
+            FileType::Mod => self.mods_dir(),
+            FileType::Resource => self.resource_pack_dir()
+        }
+    }
+
+    pub fn get_file_path(&self, file: &FileDownload) -> PathBuf {
+        self.get_file_type_dir(&file.file_type).join(&file.file_name)
+    }
+
+    pub fn install_file(&self, file: &FileDownload, src_path: &Path) -> std::io::Result<()> {
+        let dest_file = self.get_file_path(&file);
+        fs::copy(src_path, dest_file)?;
+        Ok(())
     }
 
     pub async fn launch(&self, progress: &mut dyn Progress) -> Result<Child, Box<dyn StdError>> {
@@ -317,13 +343,40 @@ fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result
     Ok(())
 }
 
+pub enum FileType {
+    Resource,
+    Mod
+}
+
 pub struct FileDownload {
     pub file_name: String,
+    pub file_type: FileType,
+    pub can_auto_download: bool,
     pub url: String
 }
 
 impl FileDownload {
-    pub fn new(file_name: String, url: String) -> Self {
-        FileDownload { file_name, url }
+    pub fn new(f: &CurseForgeFile, m: &CurseForgeMod) -> Result<Self, Error> {
+        // it feels brittle using hard coded classId, but I don't see anything
+        // else that can differentiate mods|resource pack|etc
+        let file_type = match m.class_id {
+            6 => Ok(FileType::Mod),
+            12 => Ok(FileType::Resource),
+            x => Err(Error::new(format!("Unknown class_id {}", x)))
+        }?;
+
+        // url for user to download the file manually
+        let user_dl_url = format!("{site_url}/download/{file_id}",
+            site_url = m.links.website_url, file_id = f.file_id);
+
+        Ok(FileDownload {
+            file_name: f.file_name.clone(),
+            file_type,
+            can_auto_download: f.download_url.is_some(),
+            url: match &f.download_url {
+                Some(v) => v.clone(),
+                None => user_dl_url
+            }
+        })
     }
 }

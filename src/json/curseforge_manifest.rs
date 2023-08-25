@@ -20,6 +20,12 @@ impl CurseForgePack {
             .map(|f| f.file_id)
             .collect()
     }
+
+    pub fn get_project_ids(&self) -> Vec<u64> {
+        self.files.iter()
+            .map(|f| f.project_id)
+            .collect()
+    }
 }
 
 #[derive(Deserialize)]
@@ -79,7 +85,9 @@ pub struct CurseForgeMod {
     #[serde(rename(deserialize = "id"))]
     pub mod_id: u64,
     pub slug: String,
-    pub links: CurseForgeModLinks
+    pub links: CurseForgeModLinks,
+    #[serde(rename(deserialize = "classId"))]
+    pub class_id: u64
 }
 
 #[derive(Deserialize)]
