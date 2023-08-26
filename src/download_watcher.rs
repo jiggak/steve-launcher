@@ -1,4 +1,4 @@
-use notify::{Config, Error, RecommendedWatcher, RecursiveMode, Watcher, EventKind};
+use notify::{Config, Error, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::{
     collections::HashMap, path::PathBuf, sync::mpsc::{self, Sender},
     sync::Arc, sync::Mutex, thread
@@ -30,12 +30,15 @@ impl<'a> DownloadWatcher {
         let (watch_tx, watch_rx) = mpsc::channel();
 
         let mut watcher = RecommendedWatcher::new(watch_tx.clone(), Config::default())?;
+        let watch_cancel = move || {
+            let _ = watch_tx.send(Ok(Event::new(EventKind::Other)));
+        };
 
-        watcher.watch(&self.watch_dir, RecursiveMode::NonRecursive)?;
+        scope.spawn(move || -> notify::Result<()> {
+            // starting watcher inside thread so that it doesn't get dropped
+            // from parent scope when method returns
+            watcher.watch(&self.watch_dir, RecursiveMode::NonRecursive)?;
 
-        let watch_cancel = move || watch_tx.send(Ok(notify::Event::new(notify::EventKind::Other))).unwrap();
-
-        scope.spawn(move || {
             for result in watch_rx {
                 match result {
                     Ok(notify::Event { kind: EventKind::Other, .. }) => break,
@@ -57,6 +60,8 @@ impl<'a> DownloadWatcher {
                     }
                 }
             }
+
+            Ok(())
         });
 
         Ok(watch_cancel)
