@@ -5,5 +5,6 @@ Work in progress, this list will change
 - [x] Microsoft account login
 - [x] Create instances for any vanilla version
 - [x] Add Minecraft Forge to new instances
-- [ ] Curseforge modpack discovery and install
+- [x] Curseforge modpack install
+- [ ] Curseforge modpack search
 - [ ] FTB modpack discovery and install
