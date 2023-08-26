@@ -5,6 +5,7 @@ mod download_watcher;
 mod env;
 mod instance;
 mod json;
+mod mod_pack;
 mod rules;
 
 use std::error::Error as StdError;
@@ -15,7 +16,8 @@ pub use {
     download_watcher::DownloadWatcher,
     download_watcher::WatcherMessage,
     instance::Instance,
-    instance::FileDownload
+    instance::FileDownload,
+    mod_pack::ModPack
 };
 
 

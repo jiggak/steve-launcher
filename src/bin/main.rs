@@ -7,13 +7,13 @@ use std::{
 };
 
 use console::Term;
-use dialoguer::Select;
+use dialoguer::{Confirm, Select};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
 use cli::{Parser, Cli, Commands};
 use steve::{
-    Account, AssetClient, DownloadWatcher, FileDownload, Instance, WatcherMessage,
-    Progress
+    Account, AssetClient, ModPack, DownloadWatcher, FileDownload, Instance,
+    Progress,  WatcherMessage
 };
 
 #[tokio::main(flavor = "current_thread")]
@@ -54,11 +54,28 @@ async fn main() -> Result<(), Box<dyn StdError>> {
 
             let instance_dir = absolute_path(&dir)?;
 
-            let (instance, downloads) = Instance::create_from_zip(
-                &instance_dir,
-                &zip_file,
-                &mut progress
-            ).await?;
+            let pack = ModPack::load_zip(&zip_file)?;
+
+            let instance = if Instance::exists(&dir) {
+                if !prompt_confirm("Instance already exists, are you sure you want to install the pack here?")? {
+                    return Ok(())
+                }
+
+                let mut instance = Instance::load(&instance_dir)?;
+
+                instance.update_manifest(&pack.manifest)?;
+
+                instance
+            } else {
+                Instance::create(
+                    &instance_dir,
+                    &pack.manifest.minecraft.version,
+                    pack.manifest.minecraft.get_forge_version()
+                ).await?
+            };
+
+            let downloads = instance.install_pack(&pack, &mut progress)
+                .await?;
 
             if let Some(downloads) = downloads {
                 download_blocked(instance, downloads)?;
@@ -75,6 +92,12 @@ fn absolute_path(path: &Path) -> io::Result<PathBuf> {
     } else {
         path.to_owned()
     })
+}
+
+fn prompt_confirm<S: Into<String>>(prompt: S) -> io::Result<bool> {
+    Confirm::new()
+        .with_prompt(prompt)
+        .interact()
 }
 
 async fn prompt_forge_version(mc_version: &String) -> Result<String, Box<dyn StdError>> {

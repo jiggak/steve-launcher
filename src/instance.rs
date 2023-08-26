@@ -1,12 +1,12 @@
 use std::{
-    collections::HashMap, error::Error as StdError, fs, fs::File,
-    path::Path, path::PathBuf, process::Child, process::Command
+    collections::HashMap, error::Error as StdError, fs, path::{Path, PathBuf},
+    process::Child, process::Command
 };
 
 use crate::{
     account::Account, asset_manager::{self, AssetManager}, env, Error,
     json::{CurseForgeFile, CurseForgeMod, CurseForgePack, InstanceManifest},
-    Progress
+    Progress, ModPack
 };
 
 const MANIFEST_FILE: &str = "manifest.json";
@@ -30,6 +30,14 @@ impl Instance {
             dir: fs::canonicalize(instance_dir)?,
             manifest
         })
+    }
+
+    pub fn exists(instance_dir: &Path) -> bool {
+        if !instance_dir.exists() || !instance_dir.is_dir() {
+            return false;
+        }
+
+        instance_dir.join(MANIFEST_FILE).exists()
     }
 
     pub async fn create(instance_dir: &Path, mc_version: &str, forge_version: Option<String>) -> Result<Instance, Box<dyn StdError>> {
@@ -62,39 +70,17 @@ impl Instance {
         Ok(instance)
     }
 
-    pub async fn create_from_zip(
-        instance_dir: &Path,
-        zip_path: &Path,
+    pub async fn install_pack(&self,
+        pack: &ModPack,
         progress: &mut dyn Progress
-    ) -> Result<(Instance, Option<Vec<FileDownload>>), Box<dyn StdError>> {
-        // extract zip to temp dir
-        let zip_temp_dir = std::env::temp_dir().join("foo");
-        zip_extract::extract(File::open(zip_path)?, &zip_temp_dir, false)?;
-
-        // read modpack manifest
-        let manifest: CurseForgePack = serde_json::from_reader(
-            File::open(zip_temp_dir.join("manifest.json"))?
-        )?;
-
-        // create instance from manifest
-        let instance = Self::create(
-            instance_dir,
-            &manifest.minecraft.version,
-            manifest.minecraft.get_forge_version()
-        ).await?;
-
-        fs::create_dir(instance.game_dir())?;
-
-        // copy game data from zip to instance
-        copy_dir_all(zip_temp_dir.join(&manifest.overrides), instance.game_dir())?;
-
-        // done with the zip contents, delete it
-        fs::remove_dir_all(zip_temp_dir)?;
+    ) -> Result<Option<Vec<FileDownload>>, Box<dyn StdError>> {
+        // copy pack overrides to minecraft dir
+        pack.copy_game_data(&self.game_dir())?;
 
         // download mods
         let client = crate::asset_client::AssetClient::new();
-        let file_ids = manifest.get_file_ids();
-        let project_ids = manifest.get_project_ids();
+        let file_ids = pack.manifest.get_file_ids();
+        let project_ids = pack.manifest.get_project_ids();
 
         let mut file_list = client.get_curseforge_file_list(&file_ids).await?;
         let mut mod_list = client.get_curseforge_mods(&project_ids).await?;
@@ -117,12 +103,12 @@ impl Instance {
         progress.begin("Downloading mods...", downloads.len());
 
         // create mods dir in case there are zero automated downloads with one or more manual downloads
-        fs::create_dir_all(instance.mods_dir())?;
+        fs::create_dir_all(self.mods_dir())?;
 
         for (i, f) in downloads.iter().enumerate() {
             progress.advance(i + 1);
 
-            let dest_file_path = instance.get_file_path(f);
+            let dest_file_path = self.get_file_path(f);
 
             // save time/bandwidth and skip download if dest file exists
             if dest_file_path.exists() {
@@ -135,9 +121,9 @@ impl Instance {
         progress.end();
 
         if !blocked.is_empty() {
-            Ok((instance, Some(blocked)))
+            Ok(Some(blocked))
         } else {
-            Ok((instance, None))
+            Ok(None)
         }
     }
 
@@ -178,6 +164,12 @@ impl Instance {
 
     pub fn get_file_path(&self, file: &FileDownload) -> PathBuf {
         self.get_file_type_dir(&file.file_type).join(&file.file_name)
+    }
+
+    pub fn update_manifest(&mut self, manifest: &CurseForgePack) -> Result<(), Box<dyn StdError>> {
+        self.manifest.mc_version = manifest.minecraft.version.clone();
+        self.manifest.forge_version = manifest.minecraft.get_forge_version();
+        self.write_manifest()
     }
 
     pub fn install_file(&self, file: &FileDownload, src_path: &Path) -> std::io::Result<()> {
@@ -327,20 +319,6 @@ impl Instance {
 
         Ok(cmd.spawn()?)
     }
-}
-
-fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
-    fs::create_dir_all(&dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        if ty.is_dir() {
-            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
-        } else {
-            fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
-        }
-    }
-    Ok(())
 }
 
 pub enum FileType {
