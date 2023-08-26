@@ -1,9 +1,8 @@
 mod cli;
 
 use std::{
-    error::Error as StdError, io, path::Path, path::PathBuf, process::{Command, Stdio},
-    sync::{Arc, atomic::{AtomicBool, Ordering}, mpsc::{self, Sender}},
-    thread
+    error::Error as StdError, io, path::{Path, PathBuf}, process::{Command, Stdio},
+    sync::{Arc, atomic::{AtomicBool, Ordering}, mpsc::{self, Sender}}, thread
 };
 
 use console::Term;
@@ -13,7 +12,7 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use cli::{Parser, Cli, Commands};
 use steve::{
     Account, AssetClient, ModPack, DownloadWatcher, FileDownload, Instance,
-    Progress,  WatcherMessage
+    Progress, WatcherMessage
 };
 
 #[tokio::main(flavor = "current_thread")]
