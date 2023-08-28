@@ -1,12 +1,12 @@
 use std::{error::Error as StdError, fs::{self, File}, io, path::{Path, PathBuf}};
 use crate::json::CurseForgePack;
 
-pub struct ModPack {
+pub struct CurseForgeZip {
     pub manifest: CurseForgePack,
     zip_temp_dir: PathBuf
 }
 
-impl ModPack {
+impl CurseForgeZip {
     pub fn load_zip(zip_path: &Path) -> Result<Self, Box<dyn StdError>> {
         let zip_temp_dir = zip_path.file_stem().unwrap();
 
@@ -26,13 +26,13 @@ impl ModPack {
     }
 }
 
-impl ModPack {
+impl CurseForgeZip {
     pub fn copy_game_data(&self, game_dir: &Path) -> io::Result<()> {
         copy_dir_all(self.zip_temp_dir.join(&self.manifest.overrides), game_dir)
     }
 }
 
-impl Drop for ModPack {
+impl Drop for CurseForgeZip {
     fn drop(&mut self) {
         // delete temp dir created
         fs::remove_dir_all(&self.zip_temp_dir).unwrap();

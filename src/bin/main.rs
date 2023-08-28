@@ -11,7 +11,7 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
 use cli::{Parser, Cli, Commands};
 use steve::{
-    Account, AssetClient, ModPack, DownloadWatcher, FileDownload, Instance,
+    Account, AssetClient, CurseForgeZip, DownloadWatcher, FileDownload, Instance,
     Progress, WatcherMessage
 };
 
@@ -38,8 +38,9 @@ async fn main() -> Result<(), Box<dyn StdError>> {
         },
         Commands::Launch { dir } => {
             let mut progress = ProgressHandler::new();
+            let instance_dir = absolute_path(&dir)?;
 
-            let instance = Instance::load(&dir)?;
+            let instance = Instance::load(&instance_dir)?;
             instance.launch(&mut progress)
                 .await.map(|_| ())
         },
@@ -50,19 +51,21 @@ async fn main() -> Result<(), Box<dyn StdError>> {
         },
         Commands::Import { dir, zip_file } => {
             let mut progress = ProgressHandler::new();
-
             let instance_dir = absolute_path(&dir)?;
 
-            let pack = ModPack::load_zip(&zip_file)?;
+            let pack = CurseForgeZip::load_zip(&zip_file)?;
 
-            let instance = if Instance::exists(&dir) {
+            let instance = if Instance::exists(&instance_dir) {
                 if !prompt_confirm("Instance already exists, are you sure you want to install the pack here?")? {
                     return Ok(())
                 }
 
                 let mut instance = Instance::load(&instance_dir)?;
 
-                instance.update_manifest(&pack.manifest)?;
+                instance.set_versions(
+                    pack.manifest.minecraft.version.clone(),
+                    pack.manifest.minecraft.get_forge_version()
+                )?;
 
                 instance
             } else {
@@ -70,6 +73,43 @@ async fn main() -> Result<(), Box<dyn StdError>> {
                     &instance_dir,
                     &pack.manifest.minecraft.version,
                     pack.manifest.minecraft.get_forge_version()
+                ).await?
+            };
+
+            let downloads = instance.install_pack_zip(&pack, &mut progress)
+                .await?;
+
+            if let Some(downloads) = downloads {
+                download_blocked(instance, downloads)?;
+            }
+
+            Ok(())
+        },
+        Commands::Modpack { dir, pack_id, version_id } => {
+            let mut progress = ProgressHandler::new();
+            let instance_dir = absolute_path(&dir)?;
+
+            let client = AssetClient::new();
+            let pack = client.get_modpack(pack_id, version_id).await?;
+
+            let instance = if Instance::exists(&instance_dir) {
+                if !prompt_confirm("Instance already exists, are you sure you want to install the pack here?")? {
+                    return Ok(())
+                }
+
+                let mut instance = Instance::load(&instance_dir)?;
+
+                instance.set_versions(
+                    pack.get_minecraft_version()?,
+                    pack.get_forge_version()
+                )?;
+
+                instance
+            } else {
+                Instance::create(
+                    &instance_dir,
+                    &pack.get_minecraft_version()?,
+                    pack.get_forge_version()
                 ).await?
             };
 

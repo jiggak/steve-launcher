@@ -1,11 +1,11 @@
 mod account;
 mod asset_client;
 mod asset_manager;
+mod curseforge_zip;
 mod download_watcher;
 mod env;
 mod instance;
 mod json;
-mod mod_pack;
 mod rules;
 
 use std::error::Error as StdError;
@@ -13,11 +13,11 @@ use std::error::Error as StdError;
 pub use {
     account::Account,
     asset_client::AssetClient,
+    curseforge_zip::CurseForgeZip,
     download_watcher::DownloadWatcher,
     download_watcher::WatcherMessage,
     instance::Instance,
-    instance::FileDownload,
-    mod_pack::ModPack
+    instance::FileDownload
 };
 
 

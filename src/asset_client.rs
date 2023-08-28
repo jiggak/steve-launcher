@@ -7,13 +7,14 @@ use reqwest::Client;
 use crate::{env, Error};
 use crate::json::{
     AssetManifest, ForgeVersionManifest, VersionManifest,
-    CurseForgeResponse, CurseForgeFile, CurseForgeMod
+    CurseForgeResponse, CurseForgeFile, CurseForgeMod, ModpackVersionManifest
 };
 
 const VERSION_MANIFEST_URL: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 const FORGE_INDEX_URL: &str = "https://meta.prismlauncher.org/v1/net.minecraftforge/index.json";
 const CURSE_MOD_FILES_URL: &str = "https://api.curseforge.com/v1/mods/files";
 const CURSE_MODS_URL: &str = "https://api.curseforge.com/v1/mods";
+const MODPACKS_CH_URL: &str = "https://api.modpacks.ch/public/modpack";
 
 pub struct AssetClient {
     client: Client
@@ -112,6 +113,15 @@ impl AssetClient {
             .json::<CurseForgeResponse<CurseForgeMod>>().await?;
 
         Ok(response.data)
+    }
+
+    pub async fn get_modpack(&self, pack_id: u32, version_id: u32) -> Result<ModpackVersionManifest, Box<dyn StdError>> {
+        let response = self.client.get(format!("{MODPACKS_CH_URL}/{pack_id}/{version_id}"))
+            .send().await?
+            .error_for_status()?
+            .json::<ModpackVersionManifest>().await?;
+
+        Ok(response)
     }
 }
 

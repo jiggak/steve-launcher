@@ -4,9 +4,12 @@ use std::{
 };
 
 use crate::{
-    account::Account, asset_manager::{self, AssetManager}, env, Error,
-    json::{CurseForgeFile, CurseForgeMod, CurseForgePack, InstanceManifest},
-    Progress, ModPack
+    account::Account, asset_client::AssetClient, asset_manager::{self, AssetManager},
+    env, Error,
+    json::{
+        CurseForgeFile, CurseForgeMod, InstanceManifest, ModpackVersionManifest
+    },
+    Progress, CurseForgeZip
 };
 
 const MANIFEST_FILE: &str = "manifest.json";
@@ -70,18 +73,65 @@ impl Instance {
         Ok(instance)
     }
 
-    pub async fn install_pack(&self,
-        pack: &ModPack,
+    pub async fn install_pack_zip(&self,
+        pack: &CurseForgeZip,
         progress: &mut dyn Progress
     ) -> Result<Option<Vec<FileDownload>>, Box<dyn StdError>> {
         // copy pack overrides to minecraft dir
         pack.copy_game_data(&self.game_dir())?;
 
-        // download mods
-        let client = crate::asset_client::AssetClient::new();
+        let client = AssetClient::new();
         let file_ids = pack.manifest.get_file_ids();
         let project_ids = pack.manifest.get_project_ids();
 
+        self.download_curseforge_files(&client, file_ids, project_ids, progress).await
+    }
+
+    pub async fn install_pack(&self,
+        pack: &ModpackVersionManifest,
+        progress: &mut dyn Progress
+    ) -> Result<Option<Vec<FileDownload>>, Box<dyn StdError>> {
+        let client = AssetClient::new();
+
+        let assets: Vec<_> = pack.files.iter()
+            .filter(|f| f.url.is_some())
+            .collect();
+
+        progress.begin("Downloading assets...", assets.len());
+
+        for (i, f) in assets.iter().enumerate() {
+            progress.advance(i + 1);
+
+            let dest_file_path = self.game_dir()
+                .join(&f.path)
+                .join(&f.name);
+
+            // save time/bandwidth and skip download if dest file exists
+            if dest_file_path.exists() {
+                continue;
+            }
+
+            client.download_file(f.url.as_ref().unwrap(), &dest_file_path).await?;
+        }
+
+        progress.end();
+
+        let mods: Vec<_> = pack.files.iter()
+            .filter_map(|f| f.curseforge.as_ref())
+            .collect();
+
+        let file_ids = mods.iter().map(|c| c.file_id).collect();
+        let project_ids = mods.iter().map(|c| c.project_id).collect();
+
+        self.download_curseforge_files(&client, file_ids, project_ids, progress).await
+    }
+
+    async fn download_curseforge_files(&self,
+        client: &AssetClient,
+        file_ids: Vec<u64>,
+        project_ids: Vec<u64>,
+        progress: &mut dyn Progress
+    ) -> Result<Option<Vec<FileDownload>>, Box<dyn StdError>> {
         let mut file_list = client.get_curseforge_file_list(&file_ids).await?;
         let mut mod_list = client.get_curseforge_mods(&project_ids).await?;
 
@@ -135,6 +185,12 @@ impl Instance {
         Instance::new(instance_dir, manifest)
     }
 
+    pub fn set_versions(&mut self, mc_version: String, forge_version: Option<String>) -> Result<(), Box<dyn StdError>> {
+        self.manifest.mc_version = mc_version;
+        self.manifest.forge_version = forge_version;
+        self.write_manifest()
+    }
+
     pub fn game_dir(&self) -> PathBuf {
         self.dir.join(&self.manifest.game_dir)
     }
@@ -164,12 +220,6 @@ impl Instance {
 
     pub fn get_file_path(&self, file: &FileDownload) -> PathBuf {
         self.get_file_type_dir(&file.file_type).join(&file.file_name)
-    }
-
-    pub fn update_manifest(&mut self, manifest: &CurseForgePack) -> Result<(), Box<dyn StdError>> {
-        self.manifest.mc_version = manifest.minecraft.version.clone();
-        self.manifest.forge_version = manifest.minecraft.get_forge_version();
-        self.write_manifest()
     }
 
     pub fn install_file(&self, file: &FileDownload, src_path: &Path) -> std::io::Result<()> {

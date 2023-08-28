@@ -40,5 +40,11 @@ pub enum Commands {
 
         /// Path to CurseForge modpack zip
         zip_file: PathBuf
+    },
+
+    Modpack {
+        dir: PathBuf,
+        pack_id: u32,
+        version_id: u32
     }
 }
