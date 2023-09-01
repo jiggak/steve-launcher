@@ -1,16 +1,28 @@
 use serde::Deserialize;
 
-use super::empty_string_is_none;
+use super::{empty_string_is_none, int_to_string};
 use crate::Error;
 
 // https://api.modpacks.ch/public/modpack/all
 #[derive(Deserialize)]
-pub struct ModpacksIndex {
+pub struct ModpackIndex {
     #[serde(rename(deserialize = "packs"))]
     pub pack_ids: Vec<u32>,
     pub total: u32,
     pub refreshed: u64,
     pub status: String
+}
+
+// https://api.modpacks.ch/public/modpack/search/{limit}?term={search term}
+#[derive(Deserialize)]
+pub struct ModpackSearch {
+    #[serde(rename(deserialize = "packs"))]
+    pub pack_ids: Vec<u32>,
+    #[serde(rename(deserialize = "curseforge"))]
+    pub curseforge_ids: Vec<u32>,
+    pub total: u32,
+    pub limit: u32,
+    pub refreshed: u64
 }
 
 // https://api.modpacks.ch/public/modpack/{pack_id}
@@ -21,9 +33,30 @@ pub struct ModpackManifest {
     pub name: String,
     pub synopsis: String,
     pub description: String,
+    pub authors: Vec<ModpackAuthor>,
     pub versions: Vec<ModpackVersion>,
     #[serde(rename(deserialize = "type"))]
     pub release_type: String
+}
+
+impl ToString for ModpackManifest {
+    fn to_string(&self) -> String {
+        format!(
+            "{}\n  by: {}",
+            self.name,
+            self.authors.first().map_or("", |a| &a.name)
+        )
+    }
+}
+
+#[derive(Deserialize)]
+pub struct ModpackAuthor {
+    pub id: i32,
+    pub website: Option<String>,
+    pub name: String,
+    #[serde(rename(deserialize = "type"))]
+    pub author_type: String,
+    pub updated: u64
 }
 
 #[derive(Deserialize)]
@@ -34,9 +67,15 @@ pub struct ModpackVersion {
     #[serde(rename(deserialize = "type"))]
     pub release_type: String,
     pub updated: u64,
-    pub private: bool,
-    pub specs: ModpackVersionSpecs,
+    pub private: Option<bool>,
+    pub specs: Option<ModpackVersionSpecs>,
     pub targets: Vec<ModpackVersionTarget>
+}
+
+impl ToString for ModpackVersion {
+    fn to_string(&self) -> String {
+        self.name.clone()
+    }
 }
 
 #[derive(Deserialize)]
@@ -48,7 +87,7 @@ pub struct ModpackVersionSpecs {
 
 #[derive(Deserialize)]
 pub struct ModpackVersionTarget {
-    pub id: u32,
+    pub id: i32,
     pub version: String,
     pub name: String,
     #[serde(rename(deserialize = "type"))]
@@ -65,7 +104,7 @@ pub struct ModpackVersionManifest {
     pub pack_id: u32,
     pub name: String,
     pub files: Vec<ModpackFile>,
-    pub specs: ModpackVersionSpecs,
+    pub specs: Option<ModpackVersionSpecs>,
     pub targets: Vec<ModpackVersionTarget>,
     #[serde(rename(deserialize = "type"))]
     pub release_type: String
@@ -92,12 +131,13 @@ pub struct ModpackFile {
     pub name: String,
     #[serde(rename(deserialize = "type"))]
     pub file_type: String,
+    #[serde(deserialize_with = "int_to_string")]
     pub version: String,
     pub path: String,
     #[serde(deserialize_with = "empty_string_is_none")]
     pub url: Option<String>,
     pub sha1: String,
-    pub size: u32,
+    pub size: i32,
     pub clientonly: bool,
     pub serveronly: bool,
     pub optional: bool,

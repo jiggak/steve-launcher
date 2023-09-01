@@ -102,6 +102,18 @@ impl Instance {
         for (i, f) in assets.iter().enumerate() {
             progress.advance(i + 1);
 
+            // curse packs from modpacks.ch could include a single asset file
+            // which is the full curse zip file, download and extract overrides
+            if f.file_type == "cf-extract" {
+                let dest_file_path = std::env::temp_dir().join(&f.name);
+                client.download_file(f.url.as_ref().unwrap(), &dest_file_path).await?;
+
+                let pack = CurseForgeZip::load_zip(&dest_file_path)?;
+                pack.copy_game_data(&self.game_dir())?;
+
+                continue;
+            }
+
             let dest_file_path = self.game_dir()
                 .join(&f.path)
                 .join(&f.name);

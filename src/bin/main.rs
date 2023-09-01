@@ -6,7 +6,7 @@ use std::{
 };
 
 use console::Term;
-use dialoguer::{Confirm, Select};
+use dialoguer::{Confirm, Select, theme::ColorfulTheme};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
 use cli::{Parser, Cli, Commands};
@@ -85,12 +85,47 @@ async fn main() -> Result<(), Box<dyn StdError>> {
 
             Ok(())
         },
-        Commands::Modpack { dir, pack_id, version_id } => {
+        Commands::Modpack { dir, search } => {
             let mut progress = ProgressHandler::new();
             let instance_dir = absolute_path(&dir)?;
 
             let client = AssetClient::new();
-            let pack = client.get_modpack(pack_id, version_id).await?;
+
+            let results = client.search_modpacks(&search, 5).await?;
+
+            let mut search_results = Vec::new();
+
+            for pack_id in results.pack_ids {
+                search_results.push(
+                    client.get_ftb_modpack_versions(pack_id).await?
+                );
+            }
+
+            for curse_id in results.curseforge_ids {
+                search_results.push(
+                    client.get_curse_modpack_versions(curse_id).await?
+                );
+            }
+
+            let selection = Select::with_theme(&console_theme())
+                .items(&search_results)
+                .default(0)
+                .interact()?;
+
+            let selected_pack = &search_results[selection];
+
+            let selection = Select::with_theme(&console_theme())
+                .items(&selected_pack.versions)
+                .default(0)
+                .interact()?;
+
+            let selected_version = &selected_pack.versions[selection];
+
+            let pack = if selected_pack.release_type == "Curseforge" {
+                client.get_curse_modpack(selected_pack.pack_id, selected_version.version_id).await?
+            } else {
+                client.get_ftb_modpack(selected_pack.pack_id, selected_version.version_id).await?
+            };
 
             let instance = if Instance::exists(&instance_dir) {
                 if !prompt_confirm("Instance already exists, are you sure you want to install the pack here?")? {
@@ -125,6 +160,10 @@ async fn main() -> Result<(), Box<dyn StdError>> {
     }
 }
 
+fn console_theme() -> ColorfulTheme {
+    ColorfulTheme::default()
+}
+
 fn absolute_path(path: &Path) -> io::Result<PathBuf> {
     Ok(if !path.is_absolute() {
         std::env::current_dir()?.join(path)
@@ -134,7 +173,7 @@ fn absolute_path(path: &Path) -> io::Result<PathBuf> {
 }
 
 fn prompt_confirm<S: Into<String>>(prompt: S) -> io::Result<bool> {
-    Confirm::new()
+    Confirm::with_theme(&console_theme())
         .with_prompt(prompt)
         .interact()
 }
@@ -155,7 +194,7 @@ async fn prompt_forge_version(mc_version: &String) -> Result<String, Box<dyn Std
         })
         .collect();
 
-    let selection = Select::new()
+    let selection = Select::with_theme(&console_theme())
         .with_prompt("Select Forge version (* recommended version)")
         .items(&items)
         .default(recommend_index)

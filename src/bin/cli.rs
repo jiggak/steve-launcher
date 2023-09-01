@@ -43,8 +43,9 @@ pub enum Commands {
     },
 
     Modpack {
+        /// Path to instance directory
         dir: PathBuf,
-        pack_id: u32,
-        version_id: u32
+
+        search: String
     }
 }
