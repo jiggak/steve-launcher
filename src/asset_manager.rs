@@ -3,7 +3,10 @@ use std::{collections::HashMap, fs, path::Path, path::PathBuf};
 use std::error::Error as StdError;
 
 use crate::{asset_client::AssetClient, env, Error, Progress};
-use crate::json::{AssetManifest, GameManifest, ForgeManifest};
+use crate::json::{
+    AssetDownload, AssetManifest, ForgeManifest, GameLibrary, GameLibraryArtifact,
+    GameManifest
+};
 
 pub struct AssetManager {
     client: AssetClient,
@@ -55,7 +58,9 @@ impl AssetManager {
         }
 
         let version_file = fs::File::open(version_file_path)?;
-        let game_manifest: GameManifest = serde_json::from_reader(version_file)?;
+        let mut game_manifest: GameManifest = serde_json::from_reader(version_file)?;
+
+        apply_lib_overrides(&mut game_manifest)?;
 
         Ok(game_manifest)
     }
@@ -315,6 +320,66 @@ pub fn dedup_libs(libs: &Vec<String>) -> Result<Vec<&String>, Box<dyn StdError>>
         .map(|(_, path)| *path)
         .chain(natives)
         .collect())
+}
+
+// This logic is taken from PrismLauncher meta data generator
+// https://github.com/PrismLauncher/meta/blob/44d7582f91ae87fdf9d99ef8715e6a5562b5a715/generateMojang.py
+// I understand this is in response to the nasty log4j vulnerability.
+// What I don't understand is why the PrismLauncher Forge meta data generator
+// doesn't include all of Forge's dependancies.
+// e.g. https://meta.prismlauncher.org/v1/net.minecraftforge/36.2.39.json
+// This doesn't include log4j at all, but forge 36.2.39 installer does include
+// log4j 2.15 in its libraries list.
+fn apply_lib_overrides(game_manifest: &mut GameManifest) -> Result<(), Error> {
+    for l in &mut game_manifest.libraries {
+        let lib_name = l.name.clone();
+        let mut parts = lib_name.split(":");
+
+        let err = format!("Unexpected library name '{}'", l.name);
+
+        let (group_id, name, sversion) = (
+            parts.next().ok_or(Error::new(err.as_str()))?,
+            parts.next().ok_or(Error::new(err.as_str()))?,
+            parts.next().ok_or(Error::new(err.as_str()))?
+        );
+
+        if group_id != "org.apache.logging.log4j" {
+            continue;
+        }
+
+        let version = Version::parse(sversion)
+            .map_err(|_| Error::new(format!("Unable to parse log4j SemVer '{sversion}'")))?;
+
+        if name == "log4j-api" && version < Version::parse("2.17.1").unwrap() {
+            *l =  GameLibrary::new_artifact_download(
+                "org.apache.logging.log4j:log4j-api:2.17.1",
+                GameLibraryArtifact {
+                    path: "org/apache/logging/log4j/log4j-api/2.17.1/log4j-api-2.17.1.jar".into(),
+                    download: AssetDownload {
+                        sha1: "d771af8e336e372fb5399c99edabe0919aeaf5b2".into(),
+                        size: 301872,
+                        url: "https://repo1.maven.org/maven2/org/apache/logging/log4j/log4j-api/2.17.1/log4j-api-2.17.1.jar".into()
+                    }
+                }
+            );
+        }
+
+        if name == "log4j-core" && version < Version::parse("2.17.1").unwrap() {
+            *l = GameLibrary::new_artifact_download(
+                "org.apache.logging.log4j:log4j-core:2.17.1",
+                GameLibraryArtifact {
+                    path: "org/apache/logging/log4j/log4j-core/2.17.1/log4j-core-2.17.1.jar".into(),
+                    download: AssetDownload {
+                        sha1: "779f60f3844dadc3ef597976fcb1e5127b1f343d".into(),
+                        size: 1790452,
+                        url: "https://repo1.maven.org/maven2/org/apache/logging/log4j/log4j-core/2.17.1/log4j-core-2.17.1.jar".into()
+                    }
+                }
+            );
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

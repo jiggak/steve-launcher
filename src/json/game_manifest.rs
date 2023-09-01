@@ -172,6 +172,19 @@ impl GameLibrary {
             None => None
         }
     }
+
+    pub fn new_artifact_download<S: Into<String>>(name: S, artifact: GameLibraryArtifact) -> Self {
+        Self {
+            name: name.into(),
+            downloads: GameLibraryDownloads {
+                artifact: Some(artifact),
+                classifiers: None
+            },
+            extract: None,
+            natives: None,
+            rules: None
+        }
+    }
 }
 
 #[derive(Deserialize)]
