@@ -17,7 +17,9 @@ pub use {
     download_watcher::DownloadWatcher,
     download_watcher::WatcherMessage,
     instance::Instance,
-    instance::FileDownload
+    instance::FileDownload,
+    json::ModpackManifest,
+    json::ModpackVersion
 };
 
 

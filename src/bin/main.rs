@@ -1,19 +1,17 @@
 mod cli;
+mod cmds;
 
-use std::{
-    error::Error as StdError, io, path::{Path, PathBuf}, process::{Command, Stdio},
-    sync::{Arc, atomic::{AtomicBool, Ordering}, mpsc::{self, Sender}}, thread
-};
-
-use console::Term;
-use dialoguer::{Confirm, Select, theme::ColorfulTheme};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
-
-use cli::{Parser, Cli, Commands};
-use steve::{
-    Account, AssetClient, CurseForgeZip, DownloadWatcher, FileDownload, Instance,
-    Progress, WatcherMessage
+use std::{
+    error::Error as StdError, io, path::{Path, PathBuf}
 };
+
+use cmds::{
+    create_instance, launch_instance, msal_login, modpack_search_and_install,
+    modpack_zip_install
+};
+use cli::{Parser, Cli, Commands};
+use steve::Progress;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn StdError>> {
@@ -23,145 +21,27 @@ async fn main() -> Result<(), Box<dyn StdError>> {
         Commands::Create { dir, mc_version, forge } => {
             let instance_dir = absolute_path(&dir)?;
 
-            let forge_version = if let Some(forge_version) = forge {
-                if forge_version == "prompt" {
-                    Some(prompt_forge_version(&mc_version).await?)
-                } else {
-                    Some(forge_version)
-                }
-            } else {
-                None
-            };
-
-            Instance::create(&instance_dir, &mc_version, forge_version)
-                .await.map(|_| ())
+            create_instance(&instance_dir, &mc_version, forge).await
         },
         Commands::Launch { dir } => {
-            let mut progress = ProgressHandler::new();
             let instance_dir = absolute_path(&dir)?;
 
-            let instance = Instance::load(&instance_dir)?;
-            instance.launch(&mut progress)
-                .await.map(|_| ())
+            launch_instance(&instance_dir).await
         },
         Commands::Auth => {
-            Account::login(|url, code| {
-                println!("Open the URL in your browser and enter the code: {code}\n\t{url}");
-            }).await.map(|_| ())
+            msal_login().await
         },
         Commands::Import { dir, zip_file } => {
-            let mut progress = ProgressHandler::new();
             let instance_dir = absolute_path(&dir)?;
 
-            let pack = CurseForgeZip::load_zip(&zip_file)?;
-
-            let instance = if Instance::exists(&instance_dir) {
-                if !prompt_confirm("Instance already exists, are you sure you want to install the pack here?")? {
-                    return Ok(())
-                }
-
-                let mut instance = Instance::load(&instance_dir)?;
-
-                instance.set_versions(
-                    pack.manifest.minecraft.version.clone(),
-                    pack.manifest.minecraft.get_forge_version()
-                )?;
-
-                instance
-            } else {
-                Instance::create(
-                    &instance_dir,
-                    &pack.manifest.minecraft.version,
-                    pack.manifest.minecraft.get_forge_version()
-                ).await?
-            };
-
-            let downloads = instance.install_pack_zip(&pack, &mut progress)
-                .await?;
-
-            if let Some(downloads) = downloads {
-                download_blocked(instance, downloads)?;
-            }
-
-            Ok(())
+            modpack_zip_install(&instance_dir, &zip_file).await
         },
         Commands::Modpack { dir, search } => {
-            let mut progress = ProgressHandler::new();
             let instance_dir = absolute_path(&dir)?;
 
-            let client = AssetClient::new();
-
-            let results = client.search_modpacks(&search, 5).await?;
-
-            let mut search_results = Vec::new();
-
-            for pack_id in results.pack_ids {
-                search_results.push(
-                    client.get_ftb_modpack_versions(pack_id).await?
-                );
-            }
-
-            for curse_id in results.curseforge_ids {
-                search_results.push(
-                    client.get_curse_modpack_versions(curse_id).await?
-                );
-            }
-
-            let selection = Select::with_theme(&console_theme())
-                .items(&search_results)
-                .default(0)
-                .interact()?;
-
-            let selected_pack = &search_results[selection];
-
-            let selection = Select::with_theme(&console_theme())
-                .items(&selected_pack.versions)
-                .default(0)
-                .interact()?;
-
-            let selected_version = &selected_pack.versions[selection];
-
-            let pack = if selected_pack.release_type == "Curseforge" {
-                client.get_curse_modpack(selected_pack.pack_id, selected_version.version_id).await?
-            } else {
-                client.get_ftb_modpack(selected_pack.pack_id, selected_version.version_id).await?
-            };
-
-            let instance = if Instance::exists(&instance_dir) {
-                if !prompt_confirm("Instance already exists, are you sure you want to install the pack here?")? {
-                    return Ok(())
-                }
-
-                let mut instance = Instance::load(&instance_dir)?;
-
-                instance.set_versions(
-                    pack.get_minecraft_version()?,
-                    pack.get_forge_version()
-                )?;
-
-                instance
-            } else {
-                Instance::create(
-                    &instance_dir,
-                    &pack.get_minecraft_version()?,
-                    pack.get_forge_version()
-                ).await?
-            };
-
-            let downloads = instance.install_pack(&pack, &mut progress)
-                .await?;
-
-            if let Some(downloads) = downloads {
-                download_blocked(instance, downloads)?;
-            }
-
-            Ok(())
+            modpack_search_and_install(&instance_dir, &search).await
         }
     }
-}
-
-fn console_theme() -> ColorfulTheme {
-    ColorfulTheme::default()
 }
 
 fn absolute_path(path: &Path) -> io::Result<PathBuf> {
@@ -170,164 +50,6 @@ fn absolute_path(path: &Path) -> io::Result<PathBuf> {
     } else {
         path.to_owned()
     })
-}
-
-fn prompt_confirm<S: Into<String>>(prompt: S) -> io::Result<bool> {
-    Confirm::with_theme(&console_theme())
-        .with_prompt(prompt)
-        .interact()
-}
-
-async fn prompt_forge_version(mc_version: &String) -> Result<String, Box<dyn StdError>> {
-    let client = AssetClient::new();
-
-    let versions = client.get_forge_versions(mc_version).await?;
-
-    let recommend_index = versions.iter()
-        .position(|v| v.recommended)
-        .unwrap_or(0);
-
-    let items: Vec<_> = versions.iter()
-        .map(|v| match v.recommended {
-            false => v.version.to_string(),
-            true => format!("{ver} *", ver = v.version)
-        })
-        .collect();
-
-    let selection = Select::with_theme(&console_theme())
-        .with_prompt("Select Forge version (* recommended version)")
-        .items(&items)
-        .default(recommend_index)
-        .interact()?;
-
-    Ok(versions[selection].version.to_string())
-}
-
-fn download_blocked(instance: Instance, downloads: Vec<FileDownload>) -> Result<(), Box<dyn StdError>> {
-    let watcher = DownloadWatcher::new(
-        downloads.iter()
-            .map(|f| f.file_name.as_str())
-    );
-
-    // copy any downloads already in watch dir
-    for f in &downloads {
-        if watcher.is_file_complete(&f.file_name) {
-            let file_path = watcher.watch_dir.join(&f.file_name);
-            instance.install_file(f, &file_path)?;
-        }
-    }
-
-    if watcher.is_all_complete() {
-        return Ok(());
-    }
-
-    let term = Term::stdout();
-    term.hide_cursor()?;
-
-    term.write_line("Files below must be downloaded manually. Press [o] to open all, [x] to quit.")?;
-
-    print_download_state(&term, &watcher, &downloads)?;
-
-    let (tx, rx) = mpsc::channel();
-
-    thread::scope(|scope| -> io::Result<()> {
-        let watch_cancel = watcher.watch(scope, tx.clone()).unwrap();
-        let readkey_cancel = readkey_thread(scope, term.clone(), tx);
-
-        while let Ok(msg) = rx.recv() {
-            match msg {
-                WatcherMessage::FileComplete(file_path) => {
-                    let file_name = file_path.file_name().unwrap().to_string_lossy();
-                    let file = downloads.iter()
-                        .find(|d| d.file_name == file_name)
-                        .unwrap();
-                    instance.install_file(file, &file_path)?;
-                    print_download_state(&term, &watcher, &downloads)?;
-                },
-                WatcherMessage::AllComplete => {
-                    break;
-                },
-                WatcherMessage::KeyPress(ch) => {
-                    match ch {
-                        'o' => {
-                            open_urls(
-                                downloads.iter()
-                                    .filter_map(|d| match watcher.is_file_complete(&d.file_name) {
-                                        false => Some(d.url.as_str()),
-                                        _ => None
-                                    })
-                            )?;
-                        },
-                        'x' => {
-                            break;
-                        },
-                        _ => { }
-                    }
-                },
-                WatcherMessage::Error(_) => {
-                    break;
-                }
-            }
-        }
-
-        watch_cancel();
-        readkey_cancel();
-
-        term.clear_to_end_of_screen()?;
-        term.show_cursor()?;
-
-        Ok(())
-    })?;
-
-    Ok(())
-}
-
-fn print_download_state(term: &Term, watcher: &DownloadWatcher, downloads: &Vec<FileDownload>) -> io::Result<()> {
-    for x in downloads {
-        let status = match watcher.is_file_complete(&x.file_name) {
-            true => "✅", false => "❌"
-        };
-
-        term.write_line(
-            format!("{status} {url}", url = x.url).as_str()
-        )?;
-    }
-
-    term.move_cursor_up(downloads.len())?;
-
-    Ok(())
-}
-
-fn open_urls<'a, T>(urls: T) -> io::Result<()>
-    where T: Iterator<Item = &'a str>
-{
-    for u in urls {
-        Command::new("xdg-open")
-            .arg(u)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()?;
-    }
-
-    Ok(())
-}
-
-fn readkey_thread<'scope, 'env>(scope: &'scope thread::Scope<'scope, 'env>, term: Term, tx: Sender<WatcherMessage>) -> impl Fn() {
-    let stop = Arc::new(AtomicBool::new(false));
-
-    let stop_thread = stop.clone();
-    let exit_thread = move || stop.store(true, Ordering::Relaxed);
-
-    scope.spawn(move || -> io::Result<()> {
-        while !stop_thread.load(Ordering::Relaxed) {
-            let ch = term.read_char()?;
-            tx.send(WatcherMessage::KeyPress(ch)).unwrap();
-        }
-
-        Ok(())
-    });
-
-    exit_thread
 }
 
 struct ProgressHandler {

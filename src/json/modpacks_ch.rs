@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use super::{empty_string_is_none, int_to_string};
+use super::empty_string_is_none;
 use crate::Error;
 
 // https://api.modpacks.ch/public/modpack/all
@@ -39,16 +39,6 @@ pub struct ModpackManifest {
     pub release_type: String
 }
 
-impl ToString for ModpackManifest {
-    fn to_string(&self) -> String {
-        format!(
-            "{}\n  by: {}",
-            self.name,
-            self.authors.first().map_or("", |a| &a.name)
-        )
-    }
-}
-
 #[derive(Deserialize)]
 pub struct ModpackAuthor {
     pub id: i32,
@@ -70,12 +60,6 @@ pub struct ModpackVersion {
     pub private: Option<bool>,
     pub specs: Option<ModpackVersionSpecs>,
     pub targets: Vec<ModpackVersionTarget>
-}
-
-impl ToString for ModpackVersion {
-    fn to_string(&self) -> String {
-        self.name.clone()
-    }
 }
 
 #[derive(Deserialize)]
@@ -131,8 +115,10 @@ pub struct ModpackFile {
     pub name: String,
     #[serde(rename(deserialize = "type"))]
     pub file_type: String,
-    #[serde(deserialize_with = "int_to_string")]
-    pub version: String,
+    // `version` field could be either a number or string in json response
+    // not using this field right now so removing ignoring it
+    // #[serde(deserialize_with = "int_to_string")]
+    // pub version: String,
     pub path: String,
     #[serde(deserialize_with = "empty_string_is_none")]
     pub url: Option<String>,

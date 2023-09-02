@@ -42,10 +42,12 @@ pub enum Commands {
         zip_file: PathBuf
     },
 
+    /// Search and install FTB or CurseForge modpack into new or existing instance
     Modpack {
         /// Path to instance directory
         dir: PathBuf,
 
+        /// Modpack search term
         search: String
     }
 }

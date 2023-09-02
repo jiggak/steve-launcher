@@ -11,18 +11,18 @@ Work in progress, this list will change
 - [x] Curseforge modpack search/install
 - [x] FTB modpack search/install
 
-## Chores
+## Chores/Improvements
 
 - [ ] Add license
-- [ ] Show progress of modpack search when fetching pack details
-- [ ] Consider using curse API for modpack search to improve perf
-- [ ] Skip interactive select when modpack search returns one result
 - [ ] API keys as built-time options with env var override
+- [ ] Use keyring for credential storage
+- [ ] Consider using curse API for modpack search to improve perf
+- [x] Show progress of modpack search when fetching pack details
+- [ ] Skip interactive select when modpack search returns one result
 
 ## Refactoring
 
 - [ ] Separate lib and cli app so they have their own dependencies
-- [ ] Move `ToString` impl from lib to cli for formatting modpack select lists
-- [ ] Move code out of `main.rs` and into submodule for commands
-- [ ] Consider renaming `json` submodules, "manifest" in file names seems unnecessary
-- [ ] Figure out how to do error handling correctly in `json.rs/int_to_string`
+- [x] Move `ToString` impl from lib to cli for formatting modpack select lists
+- [x] Move code out of `main.rs` and into submodule for commands
+- [ ] Consider renaming `json` submodules; "manifest" in file names seems unnecessary

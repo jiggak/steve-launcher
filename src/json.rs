@@ -27,32 +27,3 @@ where
     let o: Option<String> = Option::deserialize(deserializer)?;
     Ok(o.filter(|s| !s.is_empty()))
 }
-
-fn int_to_string<'de, D>(deserializer: D) -> Result<String, D::Error>
-where
-    D: Deserializer<'de>,
-    // D::Error: serde::de::Error
-{
-    // let result = String::deserialize(deserializer);
-    // if result.is_ok() {
-    //     return Ok(result.unwrap())
-    // }
-
-    // let result = i32::deserialize(deserializer);
-    // if result.is_ok() {
-    //     Ok(result.unwrap().to_string())
-    // } else {
-    //     Err(result.unwrap_err())
-    // }
-
-    use serde_json::Value;
-
-    let val = Value::deserialize(deserializer)?;
-    match val {
-        Value::String(s) => Ok(s),
-        Value::Number(n) => Ok(n.to_string()),
-        // what no worky?
-        // _ => Err(D::Error::custom("overflow"))
-        _ => Ok(String::from("Foobar"))
-    }
-}
