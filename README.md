@@ -13,7 +13,7 @@ Work in progress, this list will change
 
 ## Chores/Improvements
 
-- [ ] Add license
+- [x] Add license
 - [ ] API keys as built-time options with env var override
 - [ ] Use keyring for credential storage
 - [ ] Consider using curse API for modpack search to improve perf
