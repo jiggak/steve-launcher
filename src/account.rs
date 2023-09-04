@@ -153,10 +153,14 @@ pub async fn access_token(callback: LoginCallback) -> Result<MicrosoftToken, Box
 
     let msa_token_result = oauth2_client
         .exchange_device_access_token(&details)
-        .request_async(async_http_client, tokio::time::sleep, None)
+        .request_async(async_http_client, sleep, None)
         .await?;
 
     Ok(MicrosoftToken::from_token_response(msa_token_result)?)
+}
+
+async fn sleep(dur: std::time::Duration) {
+    futures_time::task::sleep(dur.into()).await;
 }
 
 async fn refresh_token(refresh_token: &str) -> Result<MicrosoftToken, Box<dyn StdError>> {

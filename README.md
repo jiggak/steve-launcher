@@ -22,7 +22,6 @@ Work in progress, this list will change
 
 ## Refactoring
 
-- [ ] Separate lib and cli app so they have their own dependencies
+- [x] Separate lib and cli app so they have their own dependencies
 - [x] Move `ToString` impl from lib to cli for formatting modpack select lists
 - [x] Move code out of `main.rs` and into submodule for commands
-- [ ] Consider renaming `json` submodules; "manifest" in file names seems unnecessary

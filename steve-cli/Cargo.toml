@@ -1,0 +1,16 @@
+[package]
+name = "steve-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "steve"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.4.2", features = ["derive"] }
+console = "0.15.7"
+dialoguer = "0.10.4"
+indicatif = "0.17.6"
+steve = { path = ".." }
+tokio = { version = "1.28.2", features = ["macros"] }
