@@ -64,12 +64,12 @@ pub fn get_package_version() -> &'static str {
 
 pub fn get_msa_client_id() -> String {
     env::var("MSA_CLIENT_ID")
-        .expect("MSA_CLIENT_ID env var not found")
+        .map_or(env!("MSA_CLIENT_ID").to_string(), |val| val)
 }
 
 pub fn get_curse_api_key() -> String {
     env::var("CURSE_API_KEY")
-        .expect("CURSE_API_KEY env var not found")
+        .map_or(env!("CURSE_API_KEY").to_string(), |val| val)
 }
 
 pub fn get_downloads_dir() -> PathBuf {
