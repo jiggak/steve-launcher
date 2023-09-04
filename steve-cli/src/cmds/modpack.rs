@@ -33,12 +33,13 @@ use super::{console_theme, prompt_confirm};
 
 pub async fn modpack_search_and_install(
     instance_dir: &Path,
-    search: &str
+    search: &str,
+    limit: u8
 ) -> Result<(), Box<dyn Error>> {
     let mut progress = ProgressHandler::new();
     let client = AssetClient::new();
 
-    let results = client.search_modpacks(search, 5).await?;
+    let results = client.search_modpacks(search, limit).await?;
 
     let mut search_results = Vec::new();
 

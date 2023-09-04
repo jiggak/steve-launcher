@@ -54,10 +54,10 @@ async fn main() -> Result<(), Box<dyn StdError>> {
 
             modpack_zip_install(&instance_dir, &zip_file).await
         },
-        Commands::Modpack { dir, search } => {
+        Commands::Modpack { dir, search, search_limit } => {
             let instance_dir = absolute_path(&dir)?;
 
-            modpack_search_and_install(&instance_dir, &search).await
+            modpack_search_and_install(&instance_dir, &search, search_limit).await
         }
     }
 }
