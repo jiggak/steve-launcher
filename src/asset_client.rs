@@ -88,7 +88,7 @@ impl AssetClient {
 
         index.versions.iter()
             .find(|v| v.version == forge_version)
-            .ok_or(Error::new("Forge version not found"))?;
+            .ok_or(Error::new(format!("Forge version '{forge_version}' not found")))?;
 
         Ok(self.client.get(FORGE_INDEX_URL.replace("index.json", format!("{forge_version}.json").as_str()))
             .send().await?
@@ -184,6 +184,9 @@ impl AssetClient {
 
 pub struct ForgeVersion {
     pub recommended: bool,
+    /// Forge version as string from the version manifest
+    pub sversion: String,
+    /// Forge version parsed as SemVer
     pub version: Version
 }
 
@@ -191,8 +194,19 @@ impl ForgeVersion {
     pub fn new(version: &str, recommended: bool) -> Result<Self, Error> {
         Ok(ForgeVersion {
             recommended,
+            sversion: version.to_string(),
             version: lenient_semver::parse(version)
                 .map_err(|e| Error::new(format!("{}", e)))?
         })
+    }
+}
+
+impl ToString for ForgeVersion {
+    fn to_string(&self) -> String {
+        if self.recommended {
+            format!("{ver} *", ver = self.version)
+        } else {
+            self.version.to_string()
+        }
     }
 }

@@ -45,24 +45,20 @@ pub async fn create_instance(
 async fn prompt_forge_version(mc_version: &str) -> Result<String, Box<dyn Error>> {
     let client = AssetClient::new();
 
+    // fetch forge versions for the version of minecraft
     let versions = client.get_forge_versions(mc_version).await?;
 
+    // find the index with recommended flag set to `true`
     let recommend_index = versions.iter()
         .position(|v| v.recommended)
         .unwrap_or(0);
 
-    let items: Vec<_> = versions.iter()
-        .map(|v| match v.recommended {
-            false => v.version.to_string(),
-            true => format!("{ver} *", ver = v.version)
-        })
-        .collect();
-
     let selection = Select::with_theme(&super::console_theme())
         .with_prompt("Select Forge version (* recommended version)")
-        .items(&items)
+        .items(&versions)
         .default(recommend_index)
         .interact()?;
 
-    Ok(versions[selection].version.to_string())
+    // return the "raw" unparsed version of forge from upstream manifest
+    Ok(versions[selection].sversion.to_owned())
 }
