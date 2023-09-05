@@ -365,10 +365,11 @@ fn apply_lib_overrides(game_manifest: &mut GameManifest) -> Result<(), Error> {
             continue;
         }
 
-        let version = Version::parse(sversion)
+        let ver_2_17_1 = Version::parse("2.17.1").unwrap();
+        let version = lenient_semver::parse(sversion)
             .map_err(|_| Error::new(format!("Unable to parse log4j SemVer '{sversion}'")))?;
 
-        if name == "log4j-api" && version < Version::parse("2.17.1").unwrap() {
+        if name == "log4j-api" && version < ver_2_17_1 {
             *l =  GameLibrary::new_artifact_download(
                 "org.apache.logging.log4j:log4j-api:2.17.1",
                 GameLibraryArtifact {
@@ -382,7 +383,7 @@ fn apply_lib_overrides(game_manifest: &mut GameManifest) -> Result<(), Error> {
             );
         }
 
-        if name == "log4j-core" && version < Version::parse("2.17.1").unwrap() {
+        if name == "log4j-core" && version < ver_2_17_1 {
             *l = GameLibrary::new_artifact_download(
                 "org.apache.logging.log4j:log4j-core:2.17.1",
                 GameLibraryArtifact {
