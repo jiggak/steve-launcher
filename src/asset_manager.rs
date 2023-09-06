@@ -349,6 +349,9 @@ pub fn dedup_libs(libs: &Vec<String>) -> Result<Vec<&String>, Box<dyn StdError>>
 // This doesn't include log4j at all, but forge 36.2.39 installer does include
 // log4j 2.15 in its libraries list.
 fn apply_lib_overrides(game_manifest: &mut GameManifest) -> Result<(), Error> {
+    let ver_2_17_1 = Version::parse("2.17.1").unwrap();
+    let ver_2_0 = Version::parse("2.0.0").unwrap();
+
     for l in &mut game_manifest.libraries {
         let lib_name = l.name.clone();
         let mut parts = lib_name.split(":");
@@ -365,11 +368,10 @@ fn apply_lib_overrides(game_manifest: &mut GameManifest) -> Result<(), Error> {
             continue;
         }
 
-        let ver_2_17_1 = Version::parse("2.17.1").unwrap();
         let version = lenient_semver::parse(sversion)
             .map_err(|_| Error::new(format!("Unable to parse log4j SemVer '{sversion}'")))?;
 
-        if name == "log4j-api" && version < ver_2_17_1 {
+        if name == "log4j-api" && version > ver_2_0 && version < ver_2_17_1 {
             *l =  GameLibrary::new_artifact_download(
                 "org.apache.logging.log4j:log4j-api:2.17.1",
                 GameLibraryArtifact {
@@ -383,7 +385,7 @@ fn apply_lib_overrides(game_manifest: &mut GameManifest) -> Result<(), Error> {
             );
         }
 
-        if name == "log4j-core" && version < ver_2_17_1 {
+        if name == "log4j-core" && version > ver_2_0 && version < ver_2_17_1 {
             *l = GameLibrary::new_artifact_download(
                 "org.apache.logging.log4j:log4j-core:2.17.1",
                 GameLibraryArtifact {

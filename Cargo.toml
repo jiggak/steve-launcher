@@ -1,6 +1,6 @@
 [workspace]
 members = ["steve-cli"]
-default-members = ["steve-cli"]
+default-members = ["steve-cli", "."]
 
 [package]
 name = "steve"
