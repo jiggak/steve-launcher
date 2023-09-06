@@ -81,6 +81,7 @@ impl Instance {
                 mc_version: mc_version.to_string(),
                 game_dir: "minecraft".to_string(),
                 java_path: None,
+                java_args: None,
                 forge_version: forge_version
             }
         )?;
@@ -295,10 +296,15 @@ impl Instance {
         assets.extract_natives(&game_manifest, &self.natives_dir(), progress)?;
 
         // use java override path from instance manifest, or default to "java" in PATH
-        let mut cmd = Command::new(match &self.manifest.java_path {
-            Some(path) => path,
-            _ => "java"
-        });
+        let mut cmd = if let Some(java_path) = &self.manifest.java_path {
+            Command::new(java_path)
+        } else {
+            Command::new("java")
+        };
+
+        if let Some(java_args) = &self.manifest.java_args {
+            cmd.args(java_args);
+        }
 
         // set current directory for log output
         cmd.current_dir(self.game_dir());
