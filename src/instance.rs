@@ -238,6 +238,10 @@ impl Instance {
         self.game_dir().join("resourcepacks")
     }
 
+    pub fn shader_pack_dir(&self) -> PathBuf {
+        self.game_dir().join("shaderpacks")
+    }
+
     pub fn natives_dir(&self) -> PathBuf {
         self.dir.join("natives")
     }
@@ -245,7 +249,8 @@ impl Instance {
     pub fn get_file_type_dir(&self, file_type: &FileType) -> PathBuf {
         match file_type {
             FileType::Mod => self.mods_dir(),
-            FileType::Resource => self.resource_pack_dir()
+            FileType::Resource => self.resource_pack_dir(),
+            FileType::Shaders => self.shader_pack_dir()
         }
     }
 
@@ -408,8 +413,9 @@ impl Instance {
 }
 
 pub enum FileType {
+    Mod,
     Resource,
-    Mod
+    Shaders
 }
 
 pub struct FileDownload {
@@ -426,7 +432,8 @@ impl FileDownload {
         let file_type = match m.class_id {
             6 => Ok(FileType::Mod),
             12 => Ok(FileType::Resource),
-            x => Err(Error::new(format!("Unknown class_id {}", x)))
+            6552 => Ok(FileType::Shaders),
+            x => Err(Error::new(format!("Unhandled curseforge class_id {}", x)))
         }?;
 
         // url for user to download the file manually
