@@ -21,7 +21,7 @@ mod asset_client;
 mod asset_manager;
 mod curseforge_zip;
 mod download_watcher;
-mod env;
+pub mod env;
 mod instance;
 mod json;
 mod rules;

@@ -29,11 +29,15 @@ use cmds::{
     modpack_zip_install
 };
 use cli::{Parser, Cli, Commands};
-use steve::Progress;
+use steve::{env, Progress};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn StdError>> {
     let cli = Cli::parse();
+
+    if let Some(dir) = cli.data_dir {
+        env::set_data_dir(dir.to_str().unwrap());
+    }
 
     match cli.command {
         Commands::Create { dir, mc_version, forge } => {

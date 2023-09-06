@@ -23,6 +23,11 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
+    /// Set the directory where shared instance data is stored
+    /// [default: $STEVE_DATA_HOME or $XDG_DATA_HOME/steve]
+    #[arg(short, verbatim_doc_comment)]
+    pub data_dir: Option<PathBuf>,
+
     #[command(subcommand)]
     pub command: Commands
 }

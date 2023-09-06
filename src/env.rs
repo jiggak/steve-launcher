@@ -19,19 +19,29 @@
 use std::env;
 use std::path::PathBuf;
 
+pub fn set_data_dir(path: &str) {
+    env::set_var("STEVE_DATA_HOME", path)
+}
+
 pub fn get_data_dir() -> PathBuf {
-    // get base data directory from XDG_DATA_HOME, or ~/.local/share
-    let base_data_dir = match env::var("XDG_DATA_HOME") {
+    // get data directory resolve order:
+    // $STEVE_DATA_HOME, $XDG_DATA_HOME/steve, $HOME/share/steve
+    match env::var("STEVE_DATA_HOME") {
         Ok(var) => PathBuf::from(var),
         Err(_) => {
-            let home_dir = env::var("HOME")
-                .expect("HOME env var not found");
+            let base_data_dir = match env::var("XDG_DATA_HOME") {
+                Ok(var) => PathBuf::from(var),
+                Err(_) => {
+                    let home_dir = env::var("HOME")
+                        .expect("HOME env var not found");
 
-            PathBuf::from(home_dir).join(".local").join("share")
+                    PathBuf::from(home_dir).join(".local").join("share")
+                }
+            };
+
+            base_data_dir.join(get_package_name())
         }
-    };
-
-    base_data_dir.join(get_package_name())
+    }
 }
 
 pub fn get_assets_dir() -> PathBuf {
