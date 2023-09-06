@@ -15,7 +15,7 @@ Work in progress, this list will change
 
 - [x] Add license
 - [x] API keys as built-time options with env var override
-- [ ] Use keyring for credential storage
+- [x] Use keyring for credential storage
 - [ ] Consider using curse API for modpack search to improve perf
 - [x] Show progress of modpack search when fetching pack details
 - [ ] Skip interactive select when modpack search returns one result

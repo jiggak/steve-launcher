@@ -24,7 +24,7 @@ use chrono::{Duration, OutOfRangeError, Utc};
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
-use std::{collections::HashMap, error::Error as StdError, fs};
+use std::{collections::HashMap, error::Error as StdError};
 use oauth2::{
     AuthUrl, ClientId, DeviceAuthorizationUrl, RefreshToken, Scope, TokenResponse, TokenUrl,
     StandardDeviceAuthorizationResponse, StandardTokenResponse, EmptyExtraTokenFields,
@@ -34,8 +34,6 @@ use oauth2::{
 use crate::env;
 use crate::json::{AccountManifest, MicrosoftToken, MinecraftToken, MinecraftProfile};
 
-const MANIFEST_FILE: &str = "account.json";
-
 pub struct Account {
     manifest: AccountManifest
 }
@@ -43,18 +41,21 @@ pub struct Account {
 pub type LoginCallback = fn(url: &str, code: &str);
 
 impl Account {
+    fn keyring_entry() -> keyring::Result<keyring::Entry> {
+        keyring::Entry::new(env::get_package_name(), &env::get_user_name())
+    }
+
     fn write_manifest(&self) -> Result<(), Box<dyn StdError>> {
-        let manifest_path = env::get_data_dir().join(MANIFEST_FILE);
-        let manifest_json = serde_json::to_string_pretty(&self.manifest)?;
-        Ok(fs::write(manifest_path, manifest_json)?)
+        let json = serde_json::to_string(&self.manifest)?;
+        Self::keyring_entry()?.set_password(&json)?;
+        Ok(())
     }
 
     pub fn load() -> Result<Self, Box<dyn StdError>> {
-        let manifest_path = env::get_data_dir().join(MANIFEST_FILE);
-        let json = fs::read_to_string(manifest_path)?;
+        let json = Self::keyring_entry()?.get_password()?;
 
         Ok(Account {
-            manifest: serde_json::from_str::<AccountManifest>(json.as_str())?
+            manifest: serde_json::from_str::<AccountManifest>(&json)?
         })
     }
 
