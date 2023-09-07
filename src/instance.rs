@@ -73,7 +73,9 @@ impl Instance {
         }
 
         // create directory to contain instance
-        fs::create_dir(instance_dir)?;
+        if !instance_dir.exists() {
+            fs::create_dir(instance_dir)?;
+        }
 
         let instance = Instance::new(
             instance_dir,
