@@ -25,7 +25,8 @@ use crate::{
     account::Account, asset_client::AssetClient, asset_manager::{self, AssetManager},
     env, Error,
     json::{
-        CurseForgeFile, CurseForgeMod, InstanceManifest, ModpackVersionManifest
+        CurseForgeFile, CurseForgeMod, ForgeManifestVariant, InstanceManifest,
+        ModpackVersionManifest
     },
     Progress, CurseForgeZip
 };
@@ -321,14 +322,21 @@ impl Instance {
         let mut cmd_args: Vec<String> = vec![];
 
         if let Some(forge_manifest) = &forge_manifest {
-            cmd_args.push("-Djava.library.path=${natives_directory}".to_string());
-            cmd_args.extend(["-cp".to_string(), "${classpath}".to_string()]);
-            cmd_args.push(forge_manifest.main_class.clone());
+            match &forge_manifest.variant {
+                ForgeManifestVariant::JarMod { jar_mods } => {
+                    panic!("JarMod not handled");
+                },
+                ForgeManifestVariant::NonJarMod { main_class, minecraft_arguments, .. } => {
+                    cmd_args.push("-Djava.library.path=${natives_directory}".to_string());
+                    cmd_args.extend(["-cp".to_string(), "${classpath}".to_string()]);
+                    cmd_args.push(main_class.clone());
 
-            if let Some(args) = &forge_manifest.minecraft_arguments {
-                cmd_args.extend(args.split(' ').map(|v| v.to_string()));
-            } else if let Some(args) = game_manifest.minecraft_arguments {
-                cmd_args.extend(args.split(' ').map(|v| v.to_string()));
+                    if let Some(args) = minecraft_arguments {
+                        cmd_args.extend(args.split(' ').map(|v| v.to_string()));
+                    } else if let Some(args) = game_manifest.minecraft_arguments {
+                        cmd_args.extend(args.split(' ').map(|v| v.to_string()));
+                    }
+                }
             }
 
             if let Some(tweaks) = &forge_manifest.tweakers {
@@ -362,10 +370,15 @@ impl Instance {
         );
 
         if let Some(forge_manifest) = &forge_manifest {
-            libs.extend(
-                forge_manifest.libraries.iter()
-                    .map(|lib| lib.asset_path())
-            );
+            match &forge_manifest.variant {
+                ForgeManifestVariant::NonJarMod { libraries, .. } => {
+                    libs.extend(
+                        libraries.iter()
+                            .map(|lib| lib.asset_path())
+                    );
+                },
+                _ => { }
+            }
         }
 
         let classpath = std::env::join_paths(

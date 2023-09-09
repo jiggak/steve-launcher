@@ -29,13 +29,10 @@ pub struct ForgeManifest {
     pub tweakers: Option<Vec<String>>,
     #[serde(rename(deserialize = "formatVersion"))]
     pub format_version: u8,
-    pub libraries: Vec<ForgeLibrary>,
-    #[serde(rename(deserialize = "mainClass"))]
-    pub main_class: String,
-    #[serde(rename(deserialize = "mavenFiles"))]
-    pub maven_files: Option<Vec<ForgeLibrary>>,
-    #[serde(rename(deserialize = "minecraftArguments"))]
-    pub minecraft_arguments: Option<String>,
+
+    #[serde(flatten)]
+    pub variant: ForgeManifestVariant,
+
     pub name: String,
     pub order: u8,
     #[serde(rename(deserialize = "releaseTime"))]
@@ -43,6 +40,24 @@ pub struct ForgeManifest {
     pub requires: Vec<ForgeVersionRequires>,
     pub uid: String,
     pub version: String
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub enum ForgeManifestVariant {
+    JarMod {
+        #[serde(rename(deserialize = "jarMods"))]
+        jar_mods: Vec<ForgeLibrary>
+    },
+    NonJarMod {
+        libraries: Vec<ForgeLibrary>,
+        #[serde(rename(deserialize = "mainClass"))]
+        main_class: String,
+        #[serde(rename(deserialize = "mavenFiles"))]
+        maven_files: Option<Vec<ForgeLibrary>>,
+        #[serde(rename(deserialize = "minecraftArguments"))]
+        minecraft_arguments: Option<String>
+    }
 }
 
 #[derive(Deserialize)]

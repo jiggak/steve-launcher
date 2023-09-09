@@ -22,8 +22,8 @@ use std::error::Error as StdError;
 
 use crate::{asset_client::AssetClient, env, Error, Progress};
 use crate::json::{
-    AssetDownload, AssetManifest, ForgeManifest, GameLibrary, GameLibraryArtifact,
-    GameManifest
+    AssetDownload, AssetManifest, ForgeLibrary, ForgeManifest, ForgeManifestVariant,
+    GameLibrary, GameLibraryArtifact, GameManifest
 };
 
 pub struct AssetManager {
@@ -208,17 +208,26 @@ impl AssetManager {
         //     None => forge_manifest.libraries.iter()
         // };
 
-        let downloads: Vec<_> = forge_manifest.libraries.iter()
-            // FIXME there must be a cleaner way to optionally chain the maven_file as iterator
-            .chain(forge_manifest.maven_files.as_ref().unwrap_or(&vec![]).iter())
-            .map(|lib| (lib.asset_path(), lib.download_url()))
-            .collect();
+        let mut downloads: Vec<&ForgeLibrary> = vec![];
+
+        match &forge_manifest.variant {
+            ForgeManifestVariant::JarMod { jar_mods } => {
+                downloads.extend(jar_mods.iter());
+            },
+            ForgeManifestVariant::NonJarMod { libraries, maven_files, .. } => {
+                downloads.extend(libraries.iter());
+
+                if let Some(maven_files) = maven_files {
+                    downloads.extend(maven_files.iter());
+                }
+            }
+        }
 
         progress.begin("Downloading forge libraries", downloads.len());
 
-        for (i, (path, url)) in downloads.iter().enumerate() {
+        for (i, (path, url)) in downloads.iter().map(|lib| (lib.asset_path(), lib.download_url())).enumerate() {
             progress.advance(i + 1);
-            self.download_library(path, url).await?;
+            self.download_library(&path, &url).await?;
         }
 
         progress.end();
