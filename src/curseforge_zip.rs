@@ -17,7 +17,7 @@
  */
 
 use std::{error::Error as StdError, fs::{self, File}, io, path::{Path, PathBuf}};
-use crate::json::CurseForgePack;
+use crate::{json::CurseForgePack, zip};
 
 pub struct CurseForgeZip {
     pub manifest: CurseForgePack,
@@ -30,7 +30,7 @@ impl CurseForgeZip {
 
         // extract zip to temp dir
         let zip_temp_dir = std::env::temp_dir().join(zip_temp_dir);
-        zip_extract::extract(File::open(zip_path)?, &zip_temp_dir, false)?;
+        zip::extract_zip(File::open(zip_path)?, &zip_temp_dir)?;
 
         // read modpack manifest
         let manifest: CurseForgePack = serde_json::from_reader(

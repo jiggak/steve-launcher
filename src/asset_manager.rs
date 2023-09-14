@@ -20,10 +20,10 @@ use semver::Version;
 use std::{collections::HashMap, fs, path::Path, path::PathBuf};
 use std::error::Error as StdError;
 
-use crate::{asset_client::AssetClient, env, Error, Progress};
+use crate::{asset_client::AssetClient, env, Error, Progress, zip};
 use crate::json::{
-    AssetDownload, AssetManifest, ForgeLibrary, ForgeManifest, ForgeManifestVariant,
-    GameLibrary, GameLibraryArtifact, GameManifest
+    AssetManifest, ForgeDistribution, ForgeLibrary, ForgeManifest, GameLibrary,
+    GameManifest
 };
 
 pub struct AssetManager {
@@ -94,7 +94,9 @@ impl AssetManager {
         }
 
         let version_file = fs::File::open(version_file_path)?;
-        let forge_manifest: ForgeManifest = serde_json::from_reader(version_file)?;
+        let mut forge_manifest: ForgeManifest = serde_json::from_reader(version_file)?;
+
+        populate_fml_libs(&mut forge_manifest);
 
         Ok(forge_manifest)
     }
@@ -203,18 +205,16 @@ impl AssetManager {
         forge_manifest: &ForgeManifest,
         progress: &mut dyn Progress
     ) -> Result<(), Box<dyn StdError>> {
-        // let srcs: dyn Iterator<Item = ForgeLibrary> = match forge_manifest.maven_files {
-        //     Some(maven_files) => forge_manifest.libraries.iter().chain(maven_files.iter()),
-        //     None => forge_manifest.libraries.iter()
-        // };
-
         let mut downloads: Vec<&ForgeLibrary> = vec![];
 
-        match &forge_manifest.variant {
-            ForgeManifestVariant::JarMod { jar_mods } => {
+        match &forge_manifest.dist {
+            ForgeDistribution::Legacy { jar_mods, fml_libs } => {
                 downloads.extend(jar_mods.iter());
+                if let Some(fml_libs) = fml_libs {
+                    downloads.extend(fml_libs.iter());
+                }
             },
-            ForgeManifestVariant::NonJarMod { libraries, maven_files, .. } => {
+            ForgeDistribution::Current { libraries, maven_files, .. } => {
                 downloads.extend(libraries.iter());
 
                 if let Some(maven_files) = maven_files {
@@ -287,7 +287,7 @@ impl AssetManager {
 
         for (i, lib) in native_libs.iter().enumerate() {
             let lib_file = self.libs_dir.join(&lib.path);
-            zip_extract::extract(fs::File::open(lib_file)?, target_dir, false)?;
+            zip::extract_zip(fs::File::open(lib_file)?, target_dir)?;
             progress.advance(i + 1);
         }
 
@@ -381,35 +381,37 @@ fn apply_lib_overrides(game_manifest: &mut GameManifest) -> Result<(), Error> {
             .map_err(|_| Error::new(format!("Unable to parse log4j SemVer '{sversion}'")))?;
 
         if name == "log4j-api" && version > ver_2_0 && version < ver_2_17_1 {
-            *l =  GameLibrary::new_artifact_download(
-                "org.apache.logging.log4j:log4j-api:2.17.1",
-                GameLibraryArtifact {
-                    path: "org/apache/logging/log4j/log4j-api/2.17.1/log4j-api-2.17.1.jar".into(),
-                    download: AssetDownload {
-                        sha1: "d771af8e336e372fb5399c99edabe0919aeaf5b2".into(),
-                        size: 301872,
-                        url: "https://repo1.maven.org/maven2/org/apache/logging/log4j/log4j-api/2.17.1/log4j-api-2.17.1.jar".into()
-                    }
-                }
-            );
+            *l =  GameLibrary::log4j_api_2_17_1();
         }
 
         if name == "log4j-core" && version > ver_2_0 && version < ver_2_17_1 {
-            *l = GameLibrary::new_artifact_download(
-                "org.apache.logging.log4j:log4j-core:2.17.1",
-                GameLibraryArtifact {
-                    path: "org/apache/logging/log4j/log4j-core/2.17.1/log4j-core-2.17.1.jar".into(),
-                    download: AssetDownload {
-                        sha1: "779f60f3844dadc3ef597976fcb1e5127b1f343d".into(),
-                        size: 1790452,
-                        url: "https://repo1.maven.org/maven2/org/apache/logging/log4j/log4j-core/2.17.1/log4j-core-2.17.1.jar".into()
-                    }
-                }
-            );
+            *l = GameLibrary::log4j_core_2_17_1();
         }
     }
 
     Ok(())
+}
+
+fn populate_fml_libs(forge_manifest: &mut ForgeManifest) {
+    let mc_version = forge_manifest.requires.first().unwrap().equals.as_ref();
+    let mc_version_semver = lenient_semver::parse(&mc_version).unwrap();
+
+    let v1_4 = Version::parse("1.4.0").unwrap();
+    let v1_5 = Version::parse("1.5.0").unwrap();
+    let v1_6 = Version::parse("1.6.0").unwrap();
+
+    match forge_manifest.dist {
+        ForgeDistribution::Legacy { ref mut fml_libs, .. } => {
+            if mc_version == "1.3.2" {
+                *fml_libs = Some(ForgeLibrary::fml_libs_1_3());
+            } else if mc_version_semver >= v1_4 && mc_version_semver < v1_5 {
+                *fml_libs = Some(ForgeLibrary::fml_libs_1_4());
+            } else if mc_version_semver >= v1_5 && mc_version_semver < v1_6 {
+                *fml_libs = Some(ForgeLibrary::fml_libs_1_5(mc_version));
+            }
+        },
+        _ => { }
+    }
 }
 
 #[cfg(test)]

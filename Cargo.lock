@@ -2145,7 +2145,8 @@ dependencies = [
  "serde_json",
  "shellexpand",
  "url",
- "zip-extract",
+ "walkdir",
+ "zip",
 ]
 
 [[package]]
@@ -2480,9 +2481,9 @@ checksum = "9d5b2c62b4012a3e1eca5a7e077d13b3bf498c4073e33ccd58626607748ceeca"
 
 [[package]]
 name = "walkdir"
-version = "2.3.3"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36df944cda56c7d8d8b7496af378e6b16de9284591917d307c9b4d313c44e698"
+checksum = "d71d857dc86794ca4c280d616f7da00d2dbfd8cd788846559a6813e6aa4b54ee"
 dependencies = [
  "same-file",
  "winapi-util",
@@ -2895,17 +2896,6 @@ dependencies = [
  "sha1",
  "time 0.3.28",
  "zstd",
-]
-
-[[package]]
-name = "zip-extract"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb654964c003959ed64cbd0d7b329bcdcbd9690facd50c8617748d3622543972"
-dependencies = [
- "log",
- "thiserror",
- "zip",
 ]
 
 [[package]]

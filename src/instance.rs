@@ -23,12 +23,11 @@ use std::{
 
 use crate::{
     account::Account, asset_client::AssetClient, asset_manager::{self, AssetManager},
-    env, Error,
-    json::{
-        CurseForgeFile, CurseForgeMod, ForgeManifestVariant, InstanceManifest,
+    CurseForgeZip, env, Error, json::{
+        CurseForgeFile, CurseForgeMod, ForgeDistribution, InstanceManifest,
         ModpackVersionManifest
     },
-    Progress, CurseForgeZip
+    Progress, zip
 };
 
 const MANIFEST_FILE: &str = "manifest.json";
@@ -229,6 +228,10 @@ impl Instance {
         self.dir.join(&self.manifest.game_dir)
     }
 
+    pub fn fml_libs_dir(&self) -> PathBuf {
+        self.game_dir().join("lib")
+    }
+
     pub fn mods_dir(&self) -> PathBuf {
         self.game_dir().join("mods")
     }
@@ -320,13 +323,57 @@ impl Instance {
         fs::create_dir_all(self.game_dir())?;
 
         let mut cmd_args: Vec<String> = vec![];
+        let mut main_jar: String = asset_manager::get_client_jar_path(&game_manifest.id);
 
         if let Some(forge_manifest) = &forge_manifest {
-            match &forge_manifest.variant {
-                ForgeManifestVariant::JarMod { jar_mods } => {
-                    panic!("JarMod not handled");
+            match &forge_manifest.dist {
+                // legacy forge distributions required modifying the `minecraft.jar` file
+                ForgeDistribution::Legacy { jar_mods, fml_libs } => {
+                    let modded_jar = format!("minecraft+forge-{}.jar", forge_manifest.version);
+                    let modded_jar_path = env::get_cache_dir().join(&modded_jar);
+                    if !modded_jar_path.exists() {
+                        // path to vanilla `minecraft.jar`
+                        let mc_jar_path = env::get_libs_dir().join(&main_jar);
+
+                        // map forge jar_mods asset library paths
+                        let jar_mods: Vec<_> = jar_mods.iter()
+                            .map(|jar| env::get_libs_dir().join(jar.asset_path()))
+                            .collect();
+
+                        // create the modified `minecraft.jar`
+                        zip::make_modded_jar(
+                            &modded_jar_path,
+                            &mc_jar_path,
+                            jar_mods.iter().map(|p| p.as_path())
+                        )?;
+                    }
+
+                    main_jar = modded_jar_path.to_string_lossy().to_string();
+
+                    // forge will throw an error on startup attempting to download
+                    // these libraries (404 not found), unless they already exist
+                    if let Some(fml_libs) = fml_libs {
+                        fs::create_dir_all(self.fml_libs_dir())?;
+
+                        for lib in fml_libs {
+                            let src_path = env::get_libs_dir().join(lib.asset_path());
+                            let dest_path = self.fml_libs_dir().join(src_path.file_name().unwrap());
+                            fs::copy(src_path, dest_path)?;
+                        }
+                    }
+
+                    cmd_args.push("-Dminecraft.applet.TargetDirectory=${game_directory}".to_string());
+                    cmd_args.push("-Djava.library.path=${natives_directory}".to_string());
+                    cmd_args.push("-Dfml.ignoreInvalidMinecraftCertificates=true".to_string());
+                    cmd_args.push("-Dfml.ignorePatchDiscrepancies=true".to_string());
+                    cmd_args.extend(["-cp".to_string(), "${classpath}".to_string()]);
+                    cmd_args.push(game_manifest.main_class);
+
+                    if let Some(args) = game_manifest.minecraft_arguments {
+                        cmd_args.extend(args.split(' ').map(|v| v.to_string()));
+                    }
                 },
-                ForgeManifestVariant::NonJarMod { main_class, minecraft_arguments, .. } => {
+                ForgeDistribution::Current { main_class, minecraft_arguments, .. } => {
                     cmd_args.push("-Djava.library.path=${natives_directory}".to_string());
                     cmd_args.extend(["-cp".to_string(), "${classpath}".to_string()]);
                     cmd_args.push(main_class.clone());
@@ -358,9 +405,7 @@ impl Instance {
             cmd_args.extend(args.split(' ').map(|v| v.to_string()));
         }
 
-        let mut libs = vec![
-            asset_manager::get_client_jar_path(&game_manifest.id)
-        ];
+        let mut libs = vec![main_jar];
 
         libs.extend(
             game_manifest.libraries.iter()
@@ -370,8 +415,8 @@ impl Instance {
         );
 
         if let Some(forge_manifest) = &forge_manifest {
-            match &forge_manifest.variant {
-                ForgeManifestVariant::NonJarMod { libraries, .. } => {
+            match &forge_manifest.dist {
+                ForgeDistribution::Current { libraries, .. } => {
                     libs.extend(
                         libraries.iter()
                             .map(|lib| lib.asset_path())

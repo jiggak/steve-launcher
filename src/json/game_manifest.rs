@@ -191,17 +191,34 @@ impl GameLibrary {
         }
     }
 
-    pub fn new_artifact_download<S: Into<String>>(name: S, artifact: GameLibraryArtifact) -> Self {
-        Self {
-            name: name.into(),
-            downloads: GameLibraryDownloads {
-                artifact: Some(artifact),
-                classifiers: None
+    pub fn log4j_api_2_17_1() -> Self {
+        serde_json::from_str(r#"
+        {
+            "downloads": {
+               "artifact": {
+                  "path": "org/apache/logging/log4j/log4j-api/2.17.1/log4j-api-2.17.1.jar",
+                  "sha1": "d771af8e336e372fb5399c99edabe0919aeaf5b2",
+                  "size": 301872,
+                  "url": "https://repo1.maven.org/maven2/org/apache/logging/log4j/log4j-api/2.17.1/log4j-api-2.17.1.jar"
+               }
             },
-            extract: None,
-            natives: None,
-            rules: None
-        }
+            "name": "org.apache.logging.log4j:log4j-api:2.17.1"
+        }"#).unwrap()
+    }
+
+    pub fn log4j_core_2_17_1() -> Self {
+        serde_json::from_str(r#"
+        {
+            "downloads": {
+               "artifact": {
+                  "path": "org/apache/logging/log4j/log4j-core/2.17.1/log4j-core-2.17.1.jar",
+                  "sha1": "779f60f3844dadc3ef597976fcb1e5127b1f343d",
+                  "size": 1790452,
+                  "url": "https://repo1.maven.org/maven2/org/apache/logging/log4j/log4j-core/2.17.1/log4j-core-2.17.1.jar"
+               }
+            },
+            "name": "org.apache.logging.log4j:log4j-core:2.17.1"
+        }"#).unwrap()
     }
 }
 

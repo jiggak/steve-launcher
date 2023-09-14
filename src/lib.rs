@@ -25,6 +25,7 @@ pub mod env;
 mod instance;
 mod json;
 mod rules;
+mod zip;
 
 use std::error::Error as StdError;
 
