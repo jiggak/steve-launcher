@@ -61,13 +61,13 @@ fn _match_lib_rules(rules: &Vec<GameLibraryRule>, ctx: &RulesContext) -> bool {
             // when allow block has OS properties match and return now
             // based on inspecting data, this appears to be desired
             if let Some(os) = &rule.os {
-                return _match_os_properties(&os, ctx);
+                return _match_os_properties(os, ctx);
             }
         }
 
         if rule.action == "disallow" {
             if let Some(os) = &rule.os {
-                if _match_os_properties(&os, ctx) {
+                if _match_os_properties(os, ctx) {
                     return false;
                 }
             }

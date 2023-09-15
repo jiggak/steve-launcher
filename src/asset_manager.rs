@@ -184,7 +184,7 @@ impl AssetManager {
                         panic!("unhandled download for {}", lib.name);
                     }
 
-                    return result;
+                    result
                 })
                 .map(|a| (a.path.as_str(), &a.download.url))
         );
@@ -301,7 +301,7 @@ pub fn get_client_jar_path(mc_version: &str) -> String {
     format!("com/mojang/minecraft/{mc_version}/minecraft-{mc_version}-client.jar")
 }
 
-pub fn dedup_libs(libs: &Vec<String>) -> Result<Vec<&String>, Box<dyn StdError>> {
+pub fn dedup_libs(libs: &[String]) -> Result<Vec<&String>, Box<dyn StdError>> {
     let mut lib_map = HashMap::new();
 
     // native jars have the same artifact path and version as their
@@ -313,7 +313,7 @@ pub fn dedup_libs(libs: &Vec<String>) -> Result<Vec<&String>, Box<dyn StdError>>
         .partition(|l| l.contains("natives"));
 
     for path in non_natives {
-        let mut parts = path.rsplitn(3, "/");
+        let mut parts = path.rsplitn(3, '/');
 
         let err = format!("Unexpected library path '{}'", path);
 
@@ -327,12 +327,8 @@ pub fn dedup_libs(libs: &Vec<String>) -> Result<Vec<&String>, Box<dyn StdError>>
         // e.g. "mmc2" -> io/github/zekerzhayard/ForgeWrapper/mmc2/ForgeWrapper-mmc2.jar
         // for these, lets invent some meaningless version instead of crashing
         // fingers crossed these types of libs will never have duplicates
-        let version = lenient_semver::parse(sversion);
-        let version = if version.is_err() {
-            Version::new(9, 9, 9)
-        } else {
-            version.unwrap()
-        };
+        let version = lenient_semver::parse(sversion)
+            .unwrap_or(Version::new(9, 9, 9));
 
         if let Some((existing_version, _)) = lib_map.get(artifact_id) {
             if *existing_version < version {
@@ -363,7 +359,7 @@ fn apply_lib_overrides(game_manifest: &mut GameManifest) -> Result<(), Error> {
 
     for l in &mut game_manifest.libraries {
         let lib_name = l.name.clone();
-        let mut parts = lib_name.split(":");
+        let mut parts = lib_name.split(':');
 
         let err = format!("Unexpected library name '{}'", l.name);
 
@@ -394,23 +390,20 @@ fn apply_lib_overrides(game_manifest: &mut GameManifest) -> Result<(), Error> {
 
 fn populate_fml_libs(forge_manifest: &mut ForgeManifest) {
     let mc_version = forge_manifest.requires.first().unwrap().equals.as_ref();
-    let mc_version_semver = lenient_semver::parse(&mc_version).unwrap();
+    let mc_version_semver = lenient_semver::parse(mc_version).unwrap();
 
     let v1_4 = Version::parse("1.4.0").unwrap();
     let v1_5 = Version::parse("1.5.0").unwrap();
     let v1_6 = Version::parse("1.6.0").unwrap();
 
-    match forge_manifest.dist {
-        ForgeDistribution::Legacy { ref mut fml_libs, .. } => {
-            if mc_version == "1.3.2" {
-                *fml_libs = Some(ForgeLibrary::fml_libs_1_3());
-            } else if mc_version_semver >= v1_4 && mc_version_semver < v1_5 {
-                *fml_libs = Some(ForgeLibrary::fml_libs_1_4());
-            } else if mc_version_semver >= v1_5 && mc_version_semver < v1_6 {
-                *fml_libs = Some(ForgeLibrary::fml_libs_1_5(mc_version));
-            }
-        },
-        _ => { }
+    if let ForgeDistribution::Legacy { ref mut fml_libs, .. } = forge_manifest.dist {
+        if mc_version == "1.3.2" {
+            *fml_libs = Some(ForgeLibrary::fml_libs_1_3());
+        } else if mc_version_semver >= v1_4 && mc_version_semver < v1_5 {
+            *fml_libs = Some(ForgeLibrary::fml_libs_1_4());
+        } else if mc_version_semver >= v1_5 && mc_version_semver < v1_6 {
+            *fml_libs = Some(ForgeLibrary::fml_libs_1_5(mc_version));
+        }
     }
 }
 

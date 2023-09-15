@@ -55,12 +55,9 @@ pub struct CurseForgeMinecraft {
 
 impl CurseForgeMinecraft {
     pub fn get_forge_version(&self) -> Option<String> {
-        let loader = self.mod_loaders.iter().find(|l| l.id.starts_with("forge"));
-        if let Some(loader) = loader {
-            Some(loader.id.replace("forge-", ""))
-        } else {
-            None
-        }
+        self.mod_loaders.iter()
+            .find(|l| l.id.starts_with("forge"))
+            .map(|l| l.id.replace("forge-", ""))
     }
 }
 

@@ -1,6 +1,31 @@
 A Minecraft launcher for the command line inspired by [Prism Launcher](https://prismlauncher.org/)
 
-Work in progress, this list will change
+# Basic Usage
+
+Authenticate with your Microsoft account. This only needs to be run once.
+The `auth` command will prompt you to open a URL, enter a code, and sign-in
+to your account. When sign-in is complete, the command will save your token
+in the system keyring.
+
+    steve auth
+
+Create a new instance.
+
+    steve create vanilla 1.20.1
+
+Launch the new instance.
+
+    steve launch vanilla
+
+# About Shared Data
+
+All of the game assets and libraries `steve` downloads are stored in a directory
+shared with all instances. This directory is resolved in the order as follows:
+
+* Is the `-d` command line option
+* `$STEVE_DATA_HOME`
+* `${XDG_DATA_HOME}/steve`
+* `${HOME}/.local/share/steve`
 
 ## Features
 
@@ -18,7 +43,8 @@ Work in progress, this list will change
 - [x] Use keyring for credential storage
 - [ ] Consider using curse API for modpack search to improve perf
 - [x] Show progress of modpack search when fetching pack details
-- [ ] Skip interactive select when modpack search returns one result
+- [ ] Figure out how to do error handling better, it's difficult to figure out what broke when Result::Err propagates to main
+- [ ] Review all `unwrap` and `panic` calls and decide if error should propagate
 
 ## Refactoring
 

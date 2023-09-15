@@ -182,6 +182,12 @@ impl AssetClient {
     }
 }
 
+impl Default for AssetClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct ForgeVersion {
     pub recommended: bool,
     /// Forge version as string from the version manifest

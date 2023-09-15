@@ -290,7 +290,7 @@ impl ForgeLibrary {
 
 /// Turns maven style name into library path
 pub fn name_to_path(name: &str) -> Result<String, Error> {
-    let mut parts = name.split(":");
+    let mut parts = name.split(':');
 
     let err = format!("Unexpected library name '{}'", name);
 
@@ -303,7 +303,7 @@ pub fn name_to_path(name: &str) -> Result<String, Error> {
 
     let file_name = format!("{artifact_id}-{version}{classifier}.jar");
 
-    let mut path: Vec<_> = group_id.split(".").collect();
+    let mut path: Vec<_> = group_id.split('.').collect();
     path.extend([artifact_id, version, file_name.as_str()]);
 
     Ok(path.join("/"))
@@ -353,7 +353,7 @@ impl ForgeArtifact {
                     url.path().strip_prefix("/maven/").unwrap().to_string()
                 // strip "/" from mavan.minecraftforge.net URL's
                 } else {
-                    url.path().strip_prefix("/").unwrap().to_string()
+                    url.path().strip_prefix('/').unwrap().to_string()
                 }
             }
         }

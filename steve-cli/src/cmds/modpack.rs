@@ -87,12 +87,12 @@ pub async fn modpack_search_and_install(
         client.get_ftb_modpack(selected_pack.pack_id, selected_version.version_id).await?
     };
 
-    let instance = if Instance::exists(&instance_dir) {
+    let instance = if Instance::exists(instance_dir) {
         if !prompt_confirm("Instance already exists, are you sure you want to install the pack here?")? {
             return Ok(())
         }
 
-        let mut instance = Instance::load(&instance_dir)?;
+        let mut instance = Instance::load(instance_dir)?;
 
         instance.set_versions(
             pack.get_minecraft_version()?,
@@ -102,7 +102,7 @@ pub async fn modpack_search_and_install(
         instance
     } else {
         Instance::create(
-            &instance_dir,
+            instance_dir,
             &pack.get_minecraft_version()?,
             pack.get_forge_version()
         ).await?
@@ -124,14 +124,14 @@ pub async fn modpack_zip_install(
 ) -> Result<(), Box<dyn Error>> {
     let mut progress = ProgressHandler::new();
 
-    let pack = CurseForgeZip::load_zip(&zip_file)?;
+    let pack = CurseForgeZip::load_zip(zip_file)?;
 
-    let instance = if Instance::exists(&instance_dir) {
+    let instance = if Instance::exists(instance_dir) {
         if !prompt_confirm("Instance already exists, are you sure you want to install the pack here?")? {
             return Ok(())
         }
 
-        let mut instance = Instance::load(&instance_dir)?;
+        let mut instance = Instance::load(instance_dir)?;
 
         instance.set_versions(
             pack.manifest.minecraft.version.clone(),
@@ -141,7 +141,7 @@ pub async fn modpack_zip_install(
         instance
     } else {
         Instance::create(
-            &instance_dir,
+            instance_dir,
             &pack.manifest.minecraft.version,
             pack.manifest.minecraft.get_forge_version()
         ).await?
@@ -266,7 +266,7 @@ fn open_urls<'a, T>(urls: T) -> IoResult<()>
     Ok(())
 }
 
-fn readkey_thread<'scope, 'env>(scope: &'scope Scope<'scope, 'env>, term: Term, tx: Sender<WatcherMessage>) -> impl Fn() {
+fn readkey_thread<'scope>(scope: &'scope Scope<'scope, '_>, term: Term, tx: Sender<WatcherMessage>) -> impl Fn() {
     let stop = Arc::new(AtomicBool::new(false));
 
     let stop_thread = stop.clone();

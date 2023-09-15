@@ -18,7 +18,7 @@
 
 use notify::{Config, Error, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::{
-    collections::HashMap, path::PathBuf, sync::mpsc::{self, Sender},
+    collections::HashMap, path::{Path, PathBuf}, sync::mpsc::{self, Sender},
     sync::Arc, sync::Mutex, thread
 };
 
@@ -85,7 +85,7 @@ impl<'a> DownloadWatcher {
         Ok(watch_cancel)
     }
 
-    fn on_file_complete(&self, path: &PathBuf) -> bool {
+    fn on_file_complete(&self, path: &Path) -> bool {
         let path_file_name = path.file_name()
             .and_then(|p| p.to_str())
             .unwrap();

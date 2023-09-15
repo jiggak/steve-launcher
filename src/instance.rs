@@ -84,7 +84,7 @@ impl Instance {
                 game_dir: "minecraft".to_string(),
                 java_path: None,
                 java_args: None,
-                forge_version: forge_version
+                forge_version
             }
         )?;
 
@@ -265,7 +265,7 @@ impl Instance {
     }
 
     pub fn install_file(&self, file: &FileDownload, src_path: &Path) -> std::io::Result<()> {
-        let dest_file = self.get_file_path(&file);
+        let dest_file = self.get_file_path(file);
         fs::copy(src_path, dest_file)?;
         Ok(())
     }
@@ -413,14 +413,11 @@ impl Instance {
         );
 
         if let Some(forge_manifest) = &forge_manifest {
-            match &forge_manifest.dist {
-                ForgeDistribution::Current { libraries, .. } => {
-                    libs.extend(
-                        libraries.iter()
-                            .map(|lib| lib.asset_path())
-                    );
-                },
-                _ => { }
+            if let ForgeDistribution::Current { libraries, .. } = &forge_manifest.dist {
+                libs.extend(
+                    libraries.iter()
+                        .map(|lib| lib.asset_path())
+                );
             }
         }
 
@@ -454,7 +451,7 @@ impl Instance {
         ]);
 
         if let Some(path) = &resources_dir {
-            arg_ctx.insert("game_assets".into(), path.to_str().unwrap().into());
+            arg_ctx.insert("game_assets", path.to_str().unwrap().into());
         }
 
         for arg in cmd_args {

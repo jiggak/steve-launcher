@@ -176,13 +176,13 @@ impl GameLibrary {
                 let host_os = env::get_host_os();
 
                 let natives_key = natives.get(host_os)
-                    .expect(format!("os name '{}' not found in lib {} natives", host_os, self.name).as_str());
+                    .unwrap_or_else(|| panic!("os name '{}' not found in lib {} natives", host_os, self.name));
 
                 let classifiers = self.downloads.classifiers.as_ref()
-                    .expect(format!("lib {} missing 'classifiers' object", self.name).as_str());
+                    .unwrap_or_else(|| panic!("lib {} missing 'classifiers' object", self.name));
 
                 let artifact = classifiers.get(natives_key)
-                    .expect(format!("expected key '{}' in lib {} classifiers", natives_key, self.name).as_str());
+                    .unwrap_or_else(|| panic!("expected key '{}' in lib {} classifiers", natives_key, self.name));
 
                 Some(artifact)
             }
