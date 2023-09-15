@@ -22,9 +22,11 @@ mod asset_manager;
 mod curseforge_zip;
 mod download_watcher;
 pub mod env;
+mod fs;
 mod instance;
 mod json;
 mod rules;
+mod zip;
 
 use std::error::Error as StdError;
 

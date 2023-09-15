@@ -17,7 +17,7 @@
  */
 
 use std::{error::Error as StdError, fs::{self, File}, io, path::{Path, PathBuf}};
-use crate::json::CurseForgePack;
+use crate::{json::CurseForgePack, zip};
 
 pub struct CurseForgeZip {
     pub manifest: CurseForgePack,
@@ -30,7 +30,7 @@ impl CurseForgeZip {
 
         // extract zip to temp dir
         let zip_temp_dir = std::env::temp_dir().join(zip_temp_dir);
-        zip_extract::extract(File::open(zip_path)?, &zip_temp_dir, false)?;
+        zip::extract_zip(File::open(zip_path)?, &zip_temp_dir)?;
 
         // read modpack manifest
         let manifest: CurseForgePack = serde_json::from_reader(
@@ -46,7 +46,7 @@ impl CurseForgeZip {
 
 impl CurseForgeZip {
     pub fn copy_game_data(&self, game_dir: &Path) -> io::Result<()> {
-        copy_dir_all(self.zip_temp_dir.join(&self.manifest.overrides), game_dir)
+        super::fs::copy_dir_all(self.zip_temp_dir.join(&self.manifest.overrides), game_dir)
     }
 }
 
@@ -55,18 +55,4 @@ impl Drop for CurseForgeZip {
         // delete temp dir created
         fs::remove_dir_all(&self.zip_temp_dir).unwrap();
     }
-}
-
-fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
-    fs::create_dir_all(&dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        if ty.is_dir() {
-            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
-        } else {
-            fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
-        }
-    }
-    Ok(())
 }
