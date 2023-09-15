@@ -353,13 +353,11 @@ impl Instance {
                     // forge will throw an error on startup attempting to download
                     // these libraries (404 not found), unless they already exist
                     if let Some(fml_libs) = fml_libs {
-                        fs::create_dir_all(self.fml_libs_dir())?;
-
-                        for lib in fml_libs {
-                            let src_path = env::get_libs_dir().join(lib.asset_path());
-                            let dest_path = self.fml_libs_dir().join(src_path.file_name().unwrap());
-                            fs::copy(src_path, dest_path)?;
-                        }
+                        super::fs::copy_files(
+                            fml_libs.iter()
+                                .map(|l| env::get_libs_dir().join(l.asset_path())),
+                            self.fml_libs_dir()
+                        )?;
                     }
 
                     cmd_args.push("-Dminecraft.applet.TargetDirectory=${game_directory}".to_string());

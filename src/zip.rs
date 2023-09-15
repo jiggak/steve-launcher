@@ -26,17 +26,6 @@ pub fn extract_zip(zip_file: File, out_dir: &Path) -> Result<()> {
             let mut outfile = fs::File::create(&outpath)?;
             io::copy(&mut file, &mut outfile)?;
         }
-
-        // Get and Set permissions
-        // is this necessary?
-        // #[cfg(unix)]
-        // {
-        //     use std::os::unix::fs::PermissionsExt;
-
-        //     if let Some(mode) = file.unix_mode() {
-        //         fs::set_permissions(&outpath, fs::Permissions::from_mode(mode)).unwrap();
-        //     }
-        // }
     }
 
     Ok(())
@@ -61,8 +50,6 @@ where
 {
     let mut zip = ZipWriter::new(writer);
     let options = FileOptions::default();
-        // is this necessary?
-        // .unix_permissions(0o755);
 
     let mut buffer = Vec::new();
     for entry in it {
@@ -90,10 +77,6 @@ where
     ZipResult::Ok(())
 }
 
-// pub fn make_modded_jar<'a, I>(output_jar: &Path, mc_jar: &Path, jar_mods: I) -> Result<()>
-//     where I: Iterator<Item = &'a Path>
-// pub fn make_modded_jar<P>(output_jar: P, mc_jar: P, jar_mods: Iterator<Item = P>) -> Result<()>
-//     where P: AsRef<Path>
 pub fn make_modded_jar<P, I>(output_jar: P, mc_jar: P, jar_mods: I) -> Result<()>
     where P: AsRef<Path>, I: Iterator, I::Item: AsRef<Path>
 {
