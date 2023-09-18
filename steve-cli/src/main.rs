@@ -40,10 +40,10 @@ async fn main() -> Result<(), Box<dyn StdError>> {
     }
 
     match cli.command {
-        Commands::Create { dir, mc_version, forge } => {
+        Commands::Create { dir, mc_version, snapshots, forge } => {
             let instance_dir = absolute_path(&dir)?;
 
-            create_instance(&instance_dir, &mc_version, forge).await
+            create_instance(&instance_dir, mc_version, snapshots, forge).await
         },
         Commands::Launch { dir } => {
             let instance_dir = absolute_path(&dir)?;

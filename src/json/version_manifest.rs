@@ -36,3 +36,9 @@ pub struct VersionManifestEntry {
     #[serde(rename(deserialize = "complianceLevel"))]
     pub compliance_level: u8
 }
+
+impl ToString for VersionManifestEntry {
+    fn to_string(&self) -> String {
+        self.id.to_owned()
+    }
+}

@@ -39,8 +39,12 @@ pub enum Commands {
         /// Path to directory of new instance
         dir: PathBuf,
 
-        /// Version of minecraft
-        mc_version: String,
+        /// Version of minecraft or prompt to select from list when not specified
+        mc_version: Option<String>,
+
+        /// Enable snapshots in prompt
+        #[arg(long)]
+        snapshots: bool,
 
         /// Enable Forge by setting Forge version or prompt to select from version list
         #[arg(long, value_name = "FORGE_VERSION", default_missing_value = "prompt", num_args = 0..=1)]

@@ -45,6 +45,7 @@ shared with all instances. This directory is resolved in the order as follows:
 - [x] Show progress of modpack search when fetching pack details
 - [ ] Figure out how to do error handling better, it's difficult to figure out what broke when Result::Err propagates to main
 - [ ] Review all `unwrap` and `panic` calls and decide if error should propagate
+- [x] Add "prompt" option for minecraft version when creating instance
 
 ## Refactoring
 

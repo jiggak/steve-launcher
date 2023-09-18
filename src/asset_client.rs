@@ -67,8 +67,12 @@ impl AssetClient {
         Ok(())
     }
 
+    pub async fn get_mc_version_manifest(&self) -> Result<VersionManifest, reqwest::Error> {
+        self.fetch_json::<VersionManifest>(VERSION_MANIFEST_URL).await
+    }
+
     pub async fn get_game_manifest_json(&self, mc_version: &str) -> Result<String, Box<dyn StdError>> {
-        let manifest: VersionManifest = self.fetch_json(VERSION_MANIFEST_URL).await?;
+        let manifest = self.get_mc_version_manifest().await?;
 
         let version = manifest.versions.iter()
             .find(|v| v.id == mc_version)

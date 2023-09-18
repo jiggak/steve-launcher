@@ -10,7 +10,7 @@ path = "src/main.rs"
 [dependencies]
 clap = { version = "4.4.2", features = ["derive"] }
 console = "0.15.7"
-dialoguer = "0.10.4"
+dialoguer = { version = "0.10.4", features = ["fuzzy-select"] }
 indicatif = "0.17.6"
 steve = { path = ".." }
 tokio = { version = "1.28.2", features = ["macros"] }

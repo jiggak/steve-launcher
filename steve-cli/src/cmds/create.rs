@@ -16,19 +16,25 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use dialoguer::Select;
+use dialoguer::{FuzzySelect, Select};
 use std::{error::Error, path::Path};
 
 use steve::{AssetClient, Instance};
 
 pub async fn create_instance(
     instance_dir: &Path,
-    mc_version: &str,
+    mc_version: Option<String>,
+    snapshots: bool,
     forge: Option<String>
 ) -> Result<(), Box<dyn Error>> {
+    let mc_version = match mc_version {
+        Some(v) => v,
+        None => prompt_mc_version(snapshots).await?
+    };
+
     let forge_version = if let Some(forge_version) = forge {
         if forge_version == "prompt" {
-            Some(prompt_forge_version(mc_version).await?)
+            Some(prompt_forge_version(&mc_version).await?)
         } else {
             Some(forge_version)
         }
@@ -36,7 +42,7 @@ pub async fn create_instance(
         None
     };
 
-    Instance::create(instance_dir, mc_version, forge_version)
+    Instance::create(instance_dir, &mc_version, forge_version)
         .await?;
 
     Ok(())
@@ -61,4 +67,21 @@ async fn prompt_forge_version(mc_version: &str) -> Result<String, Box<dyn Error>
 
     // return the "raw" unparsed version of forge from upstream manifest
     Ok(versions[selection].sversion.to_owned())
+}
+
+async fn prompt_mc_version(snapshots: bool) -> Result<String, Box<dyn Error>> {
+    let client = AssetClient::new();
+
+    let manifest = client.get_mc_version_manifest().await?;
+
+    let versions: Vec<_> = manifest.versions.into_iter()
+        .filter(|v| snapshots || v.release_type == "release")
+        .collect();
+
+    let selection = FuzzySelect::with_theme(&super::console_theme())
+        .with_prompt("Select Minecraft version")
+        .items(&versions)
+        .interact()?;
+
+    Ok(versions[selection].id.to_owned())
 }
