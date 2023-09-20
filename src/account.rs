@@ -21,7 +21,7 @@
  */
 
 use anyhow::Result;
-use chrono::{Duration, OutOfRangeError, Utc};
+use chrono::{Duration, Utc};
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
@@ -107,7 +107,7 @@ impl Account {
 impl MicrosoftToken {
     pub fn from_token_response(
         token_response: StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>
-    ) -> Result<Self, OutOfRangeError> {
+    ) -> Result<Self> {
         Ok(Self {
             access_token: token_response.access_token().secret().into(),
             refresh_token: token_response.refresh_token().unwrap().secret().into(),

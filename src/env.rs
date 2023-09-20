@@ -95,5 +95,6 @@ pub fn get_downloads_dir() -> PathBuf {
 }
 
 pub fn get_user_name() -> String {
-    env::var("USER").unwrap()
+    env::var("USER")
+        .expect("USER env var not found")
 }

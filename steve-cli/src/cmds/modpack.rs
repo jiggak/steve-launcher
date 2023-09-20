@@ -185,8 +185,8 @@ fn download_blocked(instance: Instance, downloads: Vec<FileDownload>) -> Result<
 
     let (tx, rx) = mpsc::channel();
 
-    thread::scope(|scope| -> IoResult<()> {
-        let watch_cancel = watcher.watch(scope, tx.clone()).unwrap();
+    thread::scope(|scope| -> Result<()> {
+        let watch_cancel = watcher.watch(scope, tx.clone())?;
         let readkey_cancel = readkey_thread(scope, term.clone(), tx);
 
         while let Ok(msg) = rx.recv() {
