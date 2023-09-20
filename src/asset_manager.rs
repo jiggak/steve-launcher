@@ -16,14 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use semver::Version;
+use anyhow::{Context, Result};
+use semver::{Version, VersionReq};
 use std::{collections::HashMap, fs, path::Path, path::PathBuf};
-use std::error::Error as StdError;
 
 use crate::{asset_client::AssetClient, env, Error, Progress, zip};
 use crate::json::{
     AssetManifest, ForgeDistribution, ForgeLibrary, ForgeManifest, GameLibrary,
-    GameManifest
+    GameManifest,
 };
 
 pub struct AssetManager {
@@ -34,7 +34,7 @@ pub struct AssetManager {
 }
 
 impl AssetManager {
-    pub fn new() -> Result<Self, Box<dyn StdError>> {
+    pub fn new() -> Result<Self> {
         let manager = AssetManager {
             client: AssetClient::new(),
             assets_dir: env::get_assets_dir(),
@@ -65,7 +65,7 @@ impl AssetManager {
         self.assets_dir.join("virtual").join(asset_index_id)
     }
 
-    pub async fn get_game_manifest(&self, mc_version: &str) -> Result<GameManifest, Box<dyn StdError>> {
+    pub async fn get_game_manifest(&self, mc_version: &str) -> Result<GameManifest> {
         let version_file_path = self.versions_dir()
             .join(format!("{mc_version}.json"));
 
@@ -83,7 +83,7 @@ impl AssetManager {
         Ok(game_manifest)
     }
 
-    pub async fn get_forge_manifest(&self, forge_version: &str) -> Result<ForgeManifest, Box<dyn StdError>> {
+    pub async fn get_forge_manifest(&self, forge_version: &str) -> Result<ForgeManifest> {
         let version_file_path = self.versions_dir()
             .join(format!("forge_{forge_version}.json"));
 
@@ -96,12 +96,12 @@ impl AssetManager {
         let version_file = fs::File::open(version_file_path)?;
         let mut forge_manifest: ForgeManifest = serde_json::from_reader(version_file)?;
 
-        populate_fml_libs(&mut forge_manifest);
+        populate_fml_libs(&mut forge_manifest)?;
 
         Ok(forge_manifest)
     }
 
-    pub async fn get_asset_manfiest(&self, game_manifest: &GameManifest) -> Result<AssetManifest, Box<dyn StdError>> {
+    pub async fn get_asset_manfiest(&self, game_manifest: &GameManifest) -> Result<AssetManifest> {
         let index_file_path = self.indexes_dir()
             .join(format!("{ver}.json", ver = game_manifest.asset_index.id));
 
@@ -122,7 +122,7 @@ impl AssetManager {
     pub async fn download_assets(&self,
         asset_manifest: &AssetManifest,
         progress: &mut dyn Progress
-    ) -> Result<(), Box<dyn StdError>> {
+    ) -> Result<()> {
         progress.begin("Downloading assets", asset_manifest.objects.len());
 
         for (i, (_, obj)) in asset_manifest.objects.iter().enumerate() {
@@ -135,7 +135,7 @@ impl AssetManager {
         Ok(())
     }
 
-    async fn download_asset(&self, hash: &str) -> Result<(), Box<dyn StdError>> {
+    async fn download_asset(&self, hash: &str) -> Result<()> {
         // first 2 chars of hash is used for directory of objects
         let hash_prefix = &hash[0..2];
 
@@ -156,9 +156,10 @@ impl AssetManager {
     pub async fn download_libraries(&self,
         game_manifest: &GameManifest,
         progress: &mut dyn Progress
-    ) -> Result<(), Box<dyn StdError>> {
+    ) -> Result<()> {
+        // FIXME refactor GameManifest ot use struct with `client` property
         let client = game_manifest.downloads.get("client")
-            .ok_or(Error::new("Missing 'client' key in downloads object"))?;
+            .expect("Missing 'client' key in downloads object");
 
         let client_path = get_client_jar_path(&game_manifest.id);
         let mut lib_downloads: Vec<(&str, &String)> = vec![
@@ -168,24 +169,8 @@ impl AssetManager {
         lib_downloads.extend(
             game_manifest.libraries.iter()
                 .filter(|lib| lib.has_rules_match())
-                .flat_map(|lib| {
-                    // FIXME I think this can be done in a more Rust'y way
-                    let mut result = vec![];
-
-                    if let Some(artifact) = &lib.downloads.artifact {
-                        result.push(artifact);
-                    }
-
-                    if let Some(natives) = lib.natives_artifact() {
-                        result.push(natives);
-                    }
-
-                    if result.is_empty() {
-                        panic!("unhandled download for {}", lib.name);
-                    }
-
-                    result
-                })
+                // FIXME how to let this result error propagate?
+                .flat_map(|lib| lib.artifacts_for_download().unwrap())
                 .map(|a| (a.path.as_str(), &a.download.url))
         );
 
@@ -204,7 +189,7 @@ impl AssetManager {
     pub async fn download_forge_libraries(&self,
         forge_manifest: &ForgeManifest,
         progress: &mut dyn Progress
-    ) -> Result<(), Box<dyn StdError>> {
+    ) -> Result<()> {
         let mut downloads: Vec<&ForgeLibrary> = vec![];
 
         match &forge_manifest.dist {
@@ -235,7 +220,7 @@ impl AssetManager {
         Ok(())
     }
 
-    async fn download_library(&self, path: &str, url: &str) -> Result<(), Box<dyn StdError>> {
+    async fn download_library(&self, path: &str, url: &str) -> Result<()> {
         let lib_file = self.libs_dir.join(path);
 
         // skip download if lib file already exists
@@ -250,7 +235,7 @@ impl AssetManager {
         asset_manifest: &AssetManifest,
         target_dir: &Path,
         progress: &mut dyn Progress
-    ) -> Result<(), Box<dyn StdError>> {
+    ) -> Result<()> {
         progress.begin("Copy resources", asset_manifest.objects.len());
 
         for (i, (path, obj)) in asset_manifest.objects.iter().enumerate() {
@@ -277,10 +262,11 @@ impl AssetManager {
         game_manifest: &GameManifest,
         target_dir: &Path,
         progress: &mut dyn Progress
-    ) -> Result<(), Box<dyn StdError>> {
+    ) -> Result<()> {
         let native_libs: Vec<_> = game_manifest.libraries.iter()
             .filter(|lib| lib.has_rules_match())
-            .filter_map(|lib| lib.natives_artifact())
+            // FIXME how to let this result error propagate?
+            .filter_map(|lib| lib.natives_artifact().unwrap())
             .collect();
 
         progress.begin("Extracting native jars", native_libs.len());
@@ -301,7 +287,7 @@ pub fn get_client_jar_path(mc_version: &str) -> String {
     format!("com/mojang/minecraft/{mc_version}/minecraft-{mc_version}-client.jar")
 }
 
-pub fn dedup_libs(libs: &[String]) -> Result<Vec<&String>, Box<dyn StdError>> {
+pub fn dedup_libs(libs: &[String]) -> Result<Vec<&String>> {
     let mut lib_map = HashMap::new();
 
     // native jars have the same artifact path and version as their
@@ -315,12 +301,10 @@ pub fn dedup_libs(libs: &[String]) -> Result<Vec<&String>, Box<dyn StdError>> {
     for path in non_natives {
         let mut parts = path.rsplitn(3, '/');
 
-        let err = format!("Unexpected library path '{}'", path);
-
         let (_, sversion, artifact_id) = (
-            parts.next().ok_or(Error::new(err.as_str()))?,
-            parts.next().ok_or(Error::new(err.as_str()))?,
-            parts.next().ok_or(Error::new(err.as_str()))?
+            parts.next().ok_or(Error::InvalidLibraryPath(path.clone()))?,
+            parts.next().ok_or(Error::InvalidLibraryPath(path.clone()))?,
+            parts.next().ok_or(Error::InvalidLibraryPath(path.clone()))?
         );
 
         // some paths don't have a valid version
@@ -353,20 +337,17 @@ pub fn dedup_libs(libs: &[String]) -> Result<Vec<&String>, Box<dyn StdError>> {
 // e.g. https://meta.prismlauncher.org/v1/net.minecraftforge/36.2.39.json
 // This doesn't include log4j at all, but forge 36.2.39 installer does include
 // log4j 2.15 in its libraries list.
-fn apply_lib_overrides(game_manifest: &mut GameManifest) -> Result<(), Error> {
-    let ver_2_17_1 = Version::parse("2.17.1").unwrap();
-    let ver_2_0 = Version::parse("2.0.0").unwrap();
+fn apply_lib_overrides(game_manifest: &mut GameManifest) -> Result<()> {
+    let range = VersionReq::parse(">2.0.0, <2.17.1").unwrap();
 
     for l in &mut game_manifest.libraries {
         let lib_name = l.name.clone();
         let mut parts = lib_name.split(':');
 
-        let err = format!("Unexpected library name '{}'", l.name);
-
         let (group_id, name, sversion) = (
-            parts.next().ok_or(Error::new(err.as_str()))?,
-            parts.next().ok_or(Error::new(err.as_str()))?,
-            parts.next().ok_or(Error::new(err.as_str()))?
+            parts.next().ok_or(Error::InvalidLibraryName(lib_name.clone()))?,
+            parts.next().ok_or(Error::InvalidLibraryName(lib_name.clone()))?,
+            parts.next().ok_or(Error::InvalidLibraryName(lib_name.clone()))?
         );
 
         if group_id != "org.apache.logging.log4j" {
@@ -374,13 +355,14 @@ fn apply_lib_overrides(game_manifest: &mut GameManifest) -> Result<(), Error> {
         }
 
         let version = lenient_semver::parse(sversion)
-            .map_err(|_| Error::new(format!("Unable to parse log4j SemVer '{sversion}'")))?;
+            .map_err(|_| Error::VersionParse { version: sversion.to_string() })
+            .with_context(|| format!("Unable to parse log4j SemVer '{sversion}'"))?;
 
-        if name == "log4j-api" && version > ver_2_0 && version < ver_2_17_1 {
+        if name == "log4j-api" && range.matches(&version) {
             *l =  GameLibrary::log4j_api_2_17_1();
         }
 
-        if name == "log4j-core" && version > ver_2_0 && version < ver_2_17_1 {
+        if name == "log4j-core" && range.matches(&version) {
             *l = GameLibrary::log4j_core_2_17_1();
         }
     }
@@ -388,23 +370,26 @@ fn apply_lib_overrides(game_manifest: &mut GameManifest) -> Result<(), Error> {
     Ok(())
 }
 
-fn populate_fml_libs(forge_manifest: &mut ForgeManifest) {
-    let mc_version = forge_manifest.requires.first().unwrap().equals.as_ref();
-    let mc_version_semver = lenient_semver::parse(mc_version).unwrap();
+fn populate_fml_libs(forge_manifest: &mut ForgeManifest) -> Result<()> {
+    let mc_version = forge_manifest.get_minecraft_version()?;
+    let mc_version_semver = lenient_semver::parse(&mc_version)
+        .map_err(|_| Error::VersionParse { version: mc_version.clone() })
+        .with_context(|| format!("Unable to parse forge SemVer '{mc_version}'"))?;
 
-    let v1_4 = Version::parse("1.4.0").unwrap();
-    let v1_5 = Version::parse("1.5.0").unwrap();
-    let v1_6 = Version::parse("1.6.0").unwrap();
+    let v1_4_range = VersionReq::parse(">=1.4.0, <1.5.0").unwrap();
+    let v1_5_range = VersionReq::parse(">=1.5.0, <1.6.0").unwrap();
 
     if let ForgeDistribution::Legacy { ref mut fml_libs, .. } = forge_manifest.dist {
         if mc_version == "1.3.2" {
             *fml_libs = Some(ForgeLibrary::fml_libs_1_3());
-        } else if mc_version_semver >= v1_4 && mc_version_semver < v1_5 {
+        } else if v1_4_range.matches(&mc_version_semver) {
             *fml_libs = Some(ForgeLibrary::fml_libs_1_4());
-        } else if mc_version_semver >= v1_5 && mc_version_semver < v1_6 {
-            *fml_libs = Some(ForgeLibrary::fml_libs_1_5(mc_version));
+        } else if v1_5_range.matches(&mc_version_semver) {
+            *fml_libs = Some(ForgeLibrary::fml_libs_1_5(&mc_version));
         }
     }
+
+    Ok(())
 }
 
 #[cfg(test)]

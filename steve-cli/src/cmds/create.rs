@@ -16,8 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use anyhow::Result;
 use dialoguer::{FuzzySelect, Select};
-use std::{error::Error, path::Path};
+use std::path::Path;
 
 use steve::{AssetClient, Instance};
 
@@ -26,7 +27,7 @@ pub async fn create_instance(
     mc_version: Option<String>,
     snapshots: bool,
     forge: Option<String>
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let mc_version = match mc_version {
         Some(v) => v,
         None => prompt_mc_version(snapshots).await?
@@ -48,7 +49,7 @@ pub async fn create_instance(
     Ok(())
 }
 
-async fn prompt_forge_version(mc_version: &str) -> Result<String, Box<dyn Error>> {
+async fn prompt_forge_version(mc_version: &str) -> Result<String> {
     let client = AssetClient::new();
 
     // fetch forge versions for the version of minecraft
@@ -69,7 +70,7 @@ async fn prompt_forge_version(mc_version: &str) -> Result<String, Box<dyn Error>
     Ok(versions[selection].sversion.to_owned())
 }
 
-async fn prompt_mc_version(snapshots: bool) -> Result<String, Box<dyn Error>> {
+async fn prompt_mc_version(snapshots: bool) -> Result<String> {
     let client = AssetClient::new();
 
     let manifest = client.get_mc_version_manifest().await?;

@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{error::Error as StdError, fs::{self, File}, io, path::{Path, PathBuf}};
+use anyhow::Result;
+use std::{fs::{self, File}, io, path::{Path, PathBuf}};
 use crate::{json::CurseForgePack, zip};
 
 pub struct CurseForgeZip {
@@ -25,7 +26,7 @@ pub struct CurseForgeZip {
 }
 
 impl CurseForgeZip {
-    pub fn load_zip(zip_path: &Path) -> Result<Self, Box<dyn StdError>> {
+    pub fn load_zip(zip_path: &Path) -> Result<Self> {
         let zip_temp_dir = zip_path.file_stem().unwrap();
 
         // extract zip to temp dir

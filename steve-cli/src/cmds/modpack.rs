@@ -16,10 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use anyhow::Result;
 use console::Term;
 use dialoguer::Select;
 use std::{
-    error::Error, io::Result as IoResult, path::Path, process::{Command, Stdio},
+    io::Result as IoResult, path::Path, process::{Command, Stdio},
     sync::{Arc, atomic::{AtomicBool, Ordering}, mpsc::{self, Sender}},
     thread::{self, Scope}
 };
@@ -35,7 +36,7 @@ pub async fn modpack_search_and_install(
     instance_dir: &Path,
     search: &str,
     limit: u8
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let mut progress = ProgressHandler::new();
     let client = AssetClient::new();
 
@@ -121,7 +122,7 @@ pub async fn modpack_search_and_install(
 pub async fn modpack_zip_install(
     instance_dir: &Path,
     zip_file: &Path
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let mut progress = ProgressHandler::new();
 
     let pack = CurseForgeZip::load_zip(zip_file)?;
@@ -157,7 +158,7 @@ pub async fn modpack_zip_install(
     Ok(())
 }
 
-fn download_blocked(instance: Instance, downloads: Vec<FileDownload>) -> Result<(), Box<dyn Error>> {
+fn download_blocked(instance: Instance, downloads: Vec<FileDownload>) -> Result<()> {
     let watcher = DownloadWatcher::new(
         downloads.iter()
             .map(|f| f.file_name.as_str())

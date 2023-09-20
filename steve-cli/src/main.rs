@@ -20,9 +20,7 @@ mod cli;
 mod cmds;
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
-use std::{
-    error::Error as StdError, io, path::{Path, PathBuf}
-};
+use std::{io, path::{Path, PathBuf}};
 
 use cmds::{
     create_instance, launch_instance, msal_login, modpack_search_and_install,
@@ -32,7 +30,7 @@ use cli::{Parser, Cli, Commands};
 use steve::{env, Progress};
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<(), Box<dyn StdError>> {
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     if let Some(dir) = cli.data_dir {

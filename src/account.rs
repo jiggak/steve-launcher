@@ -20,11 +20,12 @@
  * Most of the token code comes from https://github.com/KernelFreeze/minecraft-msa-auth
  */
 
+use anyhow::Result;
 use chrono::{Duration, OutOfRangeError, Utc};
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
-use std::{collections::HashMap, error::Error as StdError};
+use std::collections::HashMap;
 use oauth2::{
     AuthUrl, ClientId, DeviceAuthorizationUrl, RefreshToken, Scope, TokenResponse, TokenUrl,
     StandardDeviceAuthorizationResponse, StandardTokenResponse, EmptyExtraTokenFields,
@@ -45,13 +46,13 @@ impl Account {
         keyring::Entry::new(env::get_package_name(), &env::get_user_name())
     }
 
-    fn write_manifest(&self) -> Result<(), Box<dyn StdError>> {
+    fn write_manifest(&self) -> Result<()> {
         let json = serde_json::to_string(&self.manifest)?;
         Self::keyring_entry()?.set_password(&json)?;
         Ok(())
     }
 
-    pub fn load() -> Result<Self, Box<dyn StdError>> {
+    pub fn load() -> Result<Self> {
         let json = Self::keyring_entry()?.get_password()?;
 
         Ok(Account {
@@ -59,7 +60,7 @@ impl Account {
         })
     }
 
-    pub async fn load_with_tokens() -> Result<Self, Box<dyn StdError>> {
+    pub async fn load_with_tokens() -> Result<Self> {
         let mut account = Self::load()?;
 
         if account.manifest.msa_token.is_expired() {
@@ -79,7 +80,7 @@ impl Account {
         Ok(account)
     }
 
-    pub async fn login(callback: LoginCallback) -> Result<Account, Box<dyn StdError>> {
+    pub async fn login(callback: LoginCallback) -> Result<Account> {
         let msa_token = access_token(callback).await?;
         let mc_token = login_token(&msa_token.access_token).await?;
 
@@ -98,7 +99,7 @@ impl Account {
         &self.manifest.mc_token.access_token
     }
 
-    pub async fn fetch_profile(&self) -> Result<MinecraftProfile, Box<dyn StdError>> {
+    pub async fn fetch_profile(&self) -> Result<MinecraftProfile> {
         get_profile(&self.manifest.mc_token.access_token).await
     }
 }
@@ -115,7 +116,7 @@ impl MicrosoftToken {
     }
 }
 
-fn oauth_client() -> Result<BasicClient, Box<dyn StdError>> {
+fn oauth_client() -> Result<BasicClient> {
     let auth_url = AuthUrl::new(
         "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize".to_string()
     )?;
@@ -137,7 +138,7 @@ fn oauth_client() -> Result<BasicClient, Box<dyn StdError>> {
     .set_device_authorization_url(device_auth_url))
 }
 
-pub async fn access_token(callback: LoginCallback) -> Result<MicrosoftToken, Box<dyn StdError>> {
+pub async fn access_token(callback: LoginCallback) -> Result<MicrosoftToken> {
     let oauth2_client = oauth_client()?;
 
     let details: StandardDeviceAuthorizationResponse = oauth2_client
@@ -164,7 +165,7 @@ async fn sleep(dur: std::time::Duration) {
     futures_time::task::sleep(dur.into()).await;
 }
 
-async fn refresh_token(refresh_token: &str) -> Result<MicrosoftToken, Box<dyn StdError>> {
+async fn refresh_token(refresh_token: &str) -> Result<MicrosoftToken> {
     let oauth2_client = oauth_client()?;
 
     let msa_token_result = oauth2_client
@@ -175,7 +176,7 @@ async fn refresh_token(refresh_token: &str) -> Result<MicrosoftToken, Box<dyn St
     Ok(MicrosoftToken::from_token_response(msa_token_result)?)
 }
 
-async fn login_token(msa_access_token: &str) -> Result<MinecraftToken, Box<dyn StdError>> {
+async fn login_token(msa_access_token: &str) -> Result<MinecraftToken> {
     let client = Client::new();
 
     let xbox_authenticate_json = json!({
@@ -231,7 +232,7 @@ async fn login_token(msa_access_token: &str) -> Result<MinecraftToken, Box<dyn S
     })
 }
 
-async fn get_profile(mc_access_token: &str) -> Result<MinecraftProfile, Box<dyn StdError>> {
+async fn get_profile(mc_access_token: &str) -> Result<MinecraftProfile> {
     let client = Client::new();
 
     Ok(client
