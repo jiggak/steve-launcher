@@ -16,12 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::error::Error;
-
 use steve::Account;
 
-pub async fn msal_login() -> Result<(), Box<dyn Error>> {
+pub async fn msal_login() -> anyhow::Result<()> {
     Account::login(|url, code| {
         println!("Open the URL in your browser and enter the code: {code}\n\t{url}");
-    }).await.map(|_| ())
+    }).await?;
+
+    Ok(())
 }

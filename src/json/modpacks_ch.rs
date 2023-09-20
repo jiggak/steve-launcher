@@ -117,7 +117,7 @@ impl ModpackVersionManifest {
         self.targets.iter()
             .find(|t| t.name == "minecraft")
             .map(|t| t.version.clone())
-            .ok_or(Error::new("Missing 'minecraft' target in modpack manifest"))
+            .ok_or(Error::MinecraftTargetNotFound)
     }
 
     pub fn get_forge_version(&self) -> Option<String> {

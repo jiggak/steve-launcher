@@ -16,12 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{error::Error, path::Path};
+use anyhow::Result;
+use std::path::Path;
 
 use crate::ProgressHandler;
 use steve::Instance;
 
-pub async fn launch_instance(instance_dir: &Path) -> Result<(), Box<dyn Error>> {
+pub async fn launch_instance(instance_dir: &Path) -> Result<()> {
     let mut progress = ProgressHandler::new();
 
     let instance = Instance::load(instance_dir)?;

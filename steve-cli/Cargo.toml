@@ -8,6 +8,7 @@ name = "steve"
 path = "src/main.rs"
 
 [dependencies]
+anyhow = "1.0.75"
 clap = { version = "4.4.2", features = ["derive"] }
 console = "0.15.7"
 dialoguer = { version = "0.10.4", features = ["fuzzy-select"] }

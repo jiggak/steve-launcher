@@ -28,8 +28,6 @@ mod json;
 mod rules;
 mod zip;
 
-use std::error::Error as StdError;
-
 pub use {
     account::Account,
     asset_client::AssetClient,
@@ -42,26 +40,36 @@ pub use {
     json::ModpackVersion
 };
 
-
-#[derive(Debug)]
-pub struct Error {
-    reason: String
-}
-
-impl Error {
-    pub fn new<S: Into<String>>(reason: S) -> Self {
-        Error{
-            reason: reason.into()
-        }
-    }
-}
-
-impl StdError for Error { }
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.reason)
-    }
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("Expected library name '{0}' in format '<group_id>:<artifact_id>:<version>:[classifier]'")]
+    InvalidLibraryName(String),
+    #[error("Expected library path '{0}' in format '<_>/<version>/<artifact>'")]
+    InvalidLibraryPath(String),
+    #[error("Missing 'minecraft' target in modpack manifest")]
+    MinecraftTargetNotFound,
+    #[error("Minecraft version '{0}' not found")]
+    MinecraftVersionNotFound(String),
+    #[error("Forge version '{0}' not found")]
+    ForgeVersionNotFound(String),
+    #[error("Unable to parse '{version}' with lenient_semver")]
+    VersionParse {
+        version: String,
+        // FIXME this adds a lifetime requirement I don't want to deal with right now
+        // #[source]
+        // source: lenient_semver::parser::Error
+    },
+    #[error("Missing 'net.minecraft' in forge manifest requires list")]
+    ForgeRequiresNotFound,
+    #[error("CurseForge file results({file_list_len}) do not match mod results({mod_list_len})")]
+    CurseFileListMismatch {
+        file_list_len: usize,
+        mod_list_len: usize
+    },
+    #[error("Instance directory '{0}' not found or doesn't contain manifest.json file")]
+    InstanceNotFound(String),
+    #[error("Account credentials not found, run authenticate to save credentials")]
+    CredentialNotFound
 }
 
 pub trait Progress {

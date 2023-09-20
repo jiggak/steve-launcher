@@ -16,9 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use anyhow::{bail, Result};
 use std::{
-    collections::HashMap, error::Error as StdError, fs, path::{Path, PathBuf},
-    process::Child, process::Command
+    collections::HashMap, fs, path::{Path, PathBuf}, process::Child, process::Command
 };
 
 use crate::{
@@ -40,13 +40,13 @@ pub struct Instance {
 }
 
 impl Instance {
-    fn write_manifest(&self) -> Result<(), Box<dyn StdError>> {
+    fn write_manifest(&self) -> Result<()> {
         let manifest_path = self.dir.join(MANIFEST_FILE);
         let manifest_json = serde_json::to_string_pretty(&self.manifest)?;
         Ok(fs::write(manifest_path, manifest_json)?)
     }
 
-    fn new(instance_dir: &Path, manifest: InstanceManifest) -> Result<Instance, Box<dyn StdError>> {
+    fn new(instance_dir: &Path, manifest: InstanceManifest) -> Result<Instance> {
         Ok(Instance {
             dir: fs::canonicalize(instance_dir)?,
             manifest
@@ -61,7 +61,11 @@ impl Instance {
         instance_dir.join(MANIFEST_FILE).exists()
     }
 
-    pub async fn create(instance_dir: &Path, mc_version: &str, forge_version: Option<String>) -> Result<Instance, Box<dyn StdError>> {
+    pub async fn create(
+        instance_dir: &Path,
+        mc_version: &str,
+        forge_version: Option<String>
+    ) -> Result<Instance> {
         let assets = AssetManager::new()?;
 
         // validate `mc_version`
@@ -97,7 +101,7 @@ impl Instance {
     pub async fn install_pack_zip(&self,
         pack: &CurseForgeZip,
         progress: &mut dyn Progress
-    ) -> Result<Option<Vec<FileDownload>>, Box<dyn StdError>> {
+    ) -> Result<Option<Vec<FileDownload>>> {
         // copy pack overrides to minecraft dir
         pack.copy_game_data(&self.game_dir())?;
 
@@ -111,7 +115,7 @@ impl Instance {
     pub async fn install_pack(&self,
         pack: &ModpackVersionManifest,
         progress: &mut dyn Progress
-    ) -> Result<Option<Vec<FileDownload>>, Box<dyn StdError>> {
+    ) -> Result<Option<Vec<FileDownload>>> {
         let client = AssetClient::new();
 
         let assets: Vec<_> = pack.files.iter()
@@ -164,14 +168,15 @@ impl Instance {
         file_ids: Vec<u64>,
         project_ids: Vec<u64>,
         progress: &mut dyn Progress
-    ) -> Result<Option<Vec<FileDownload>>, Box<dyn StdError>> {
+    ) -> Result<Option<Vec<FileDownload>>> {
         let mut file_list = client.get_curseforge_file_list(&file_ids).await?;
         let mut mod_list = client.get_curseforge_mods(&project_ids).await?;
 
         if file_list.len() != mod_list.len() {
-            let msg = format!("CurseForge file results({}) do not match mod results({})",
-                file_list.len(), mod_list.len());
-            return Err(Box::new(Error::new(msg)));
+            bail!(Error::CurseFileListMismatch {
+                file_list_len: file_list.len(),
+                mod_list_len: mod_list.len()
+            });
         }
 
         // sort the lists so that we can zip them into list of pairs
@@ -180,7 +185,7 @@ impl Instance {
 
         // filter files that can be auto-downloaded, and those that must be manually downloaded
         let (downloads, blocked): (Vec<_>, Vec<_>) = file_list.iter().zip(mod_list)
-            .map(|(f, m)| FileDownload::new(f, &m).unwrap())
+            .map(|(f, m)| FileDownload::new(f, &m))
             .partition(|f| f.can_auto_download);
 
         progress.begin("Downloading mods...", downloads.len());
@@ -210,15 +215,19 @@ impl Instance {
         }
     }
 
-    pub fn load(instance_dir: &Path) -> Result<Instance, Box<dyn StdError>> {
+    pub fn load(instance_dir: &Path) -> Result<Instance> {
         let manifest_path = instance_dir.join(MANIFEST_FILE);
+        if !manifest_path.exists() {
+            bail!(Error::InstanceNotFound(instance_dir.to_str().unwrap().to_string()))
+        }
+
         let json = fs::read_to_string(manifest_path)?;
         let manifest = serde_json::from_str::<InstanceManifest>(json.as_str())?;
 
         Instance::new(instance_dir, manifest)
     }
 
-    pub fn set_versions(&mut self, mc_version: String, forge_version: Option<String>) -> Result<(), Box<dyn StdError>> {
+    pub fn set_versions(&mut self, mc_version: String, forge_version: Option<String>) -> Result<()> {
         self.manifest.mc_version = mc_version;
         self.manifest.forge_version = forge_version;
         self.write_manifest()
@@ -270,7 +279,7 @@ impl Instance {
         Ok(())
     }
 
-    pub async fn launch(&self, progress: &mut dyn Progress) -> Result<Child, Box<dyn StdError>> {
+    pub async fn launch(&self, progress: &mut dyn Progress) -> Result<Child> {
         let account = Account::load_with_tokens().await?;
 
         let profile = account.fetch_profile().await?;
@@ -481,21 +490,21 @@ pub struct FileDownload {
 }
 
 impl FileDownload {
-    pub fn new(f: &CurseForgeFile, m: &CurseForgeMod) -> Result<Self, Error> {
+    pub fn new(f: &CurseForgeFile, m: &CurseForgeMod) -> Self {
         // it feels brittle using hard coded classId, but I don't see anything
         // else that can differentiate mods|resource pack|etc
         let file_type = match m.class_id {
-            6 => Ok(FileType::Mod),
-            12 => Ok(FileType::Resource),
-            6552 => Ok(FileType::Shaders),
-            x => Err(Error::new(format!("Unhandled curseforge class_id {}", x)))
-        }?;
+            6 => FileType::Mod,
+            12 => FileType::Resource,
+            6552 => FileType::Shaders,
+            x => panic!("Unimplemented curseforge class_id {x}")
+        };
 
         // url for user to download the file manually
         let user_dl_url = format!("{site_url}/download/{file_id}",
             site_url = m.links.website_url, file_id = f.file_id);
 
-        Ok(FileDownload {
+        FileDownload {
             file_name: f.file_name.clone(),
             file_type,
             can_auto_download: f.download_url.is_some(),
@@ -503,6 +512,6 @@ impl FileDownload {
                 Some(v) => v.clone(),
                 None => user_dl_url
             }
-        })
+        }
     }
 }

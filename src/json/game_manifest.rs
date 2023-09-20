@@ -29,7 +29,7 @@ pub struct GameManifest {
     pub assets: String,
     #[serde(rename(deserialize = "complianceLevel"))]
     pub compliance_level: Option<u8>,
-    pub downloads: HashMap<String, AssetDownload>,
+    pub downloads: GameDownloads,
     pub id: String,
     #[serde(rename(deserialize = "javaVersion"))]
     pub java_version: Option<GameJavaVersion>,
@@ -138,6 +138,15 @@ pub struct GameAssetIndex {
 }
 
 #[derive(Deserialize)]
+pub struct GameDownloads {
+    pub client: AssetDownload,
+    pub client_mappings: Option<AssetDownload>,
+    pub server: Option<AssetDownload>,
+    pub server_mappings: Option<AssetDownload>,
+    pub server_windows: Option<AssetDownload>
+}
+
+#[derive(Deserialize)]
 pub struct AssetDownload {
     pub sha1: String,
     pub size: u32,
@@ -170,24 +179,47 @@ impl GameLibrary {
         }
     }
 
-    pub fn natives_artifact(&self) -> Option<&GameLibraryArtifact> {
-        match &self.natives {
+    pub fn natives_artifact(&self) -> Result<Option<&GameLibraryArtifact>, GameLibError> {
+        Ok(match &self.natives {
             Some(natives) => {
                 let host_os = env::get_host_os();
 
                 let natives_key = natives.get(host_os)
-                    .unwrap_or_else(|| panic!("os name '{}' not found in lib {} natives", host_os, self.name));
+                    .ok_or(GameLibError::OsNotFound {
+                        lib_name: self.name.to_string(),
+                        os_name: host_os.to_string()
+                    })?;
 
                 let classifiers = self.downloads.classifiers.as_ref()
-                    .unwrap_or_else(|| panic!("lib {} missing 'classifiers' object", self.name));
+                    .ok_or(GameLibError::ClassifiersNotFound(self.name.to_string()))?;
 
                 let artifact = classifiers.get(natives_key)
-                    .unwrap_or_else(|| panic!("expected key '{}' in lib {} classifiers", natives_key, self.name));
+                    .ok_or(GameLibError::ClassifierNativeKeyNotFound {
+                        lib_name: self.name.to_string(),
+                        natives_key: natives_key.to_string()
+                    })?;
 
                 Some(artifact)
             }
 
             None => None
+        })
+    }
+
+    pub fn artifacts_for_download(&self) -> Result<Vec<&GameLibraryArtifact>, GameLibError> {
+        let artifacts = [
+            self.downloads.artifact.as_ref(),
+            self.natives_artifact()?
+        ];
+
+        let artifacts: Vec<&GameLibraryArtifact> = artifacts.iter()
+            .filter_map(|a| *a)
+            .collect();
+
+        if artifacts.is_empty() {
+            Err(GameLibError::UnhandledDownload(self.name.to_string()))
+        } else {
+            Ok(artifacts)
         }
     }
 
@@ -220,6 +252,18 @@ impl GameLibrary {
             "name": "org.apache.logging.log4j:log4j-core:2.17.1"
         }"#).unwrap()
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum GameLibError {
+    #[error("OS name '{os_name}' not found in lib {lib_name} natives")]
+    OsNotFound { lib_name: String, os_name: String },
+    #[error("Lib {0} missing 'classifiers' object")]
+    ClassifiersNotFound(String),
+    #[error("Expected key '{natives_key}' in lib {lib_name} classifiers")]
+    ClassifierNativeKeyNotFound { lib_name: String, natives_key: String },
+    #[error("Hnhandled download for {0}")]
+    UnhandledDownload(String)
 }
 
 #[derive(Deserialize)]

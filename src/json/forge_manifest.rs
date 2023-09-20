@@ -39,6 +39,15 @@ pub struct ForgeManifest {
     pub version: String
 }
 
+impl ForgeManifest {
+    pub fn get_minecraft_version(&self) -> Result<String, Error> {
+        self.requires.iter()
+            .find(|r| r.uid == "net.minecraft")
+            .map(|r| r.equals.clone())
+            .ok_or(Error::ForgeRequiresNotFound)
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum ForgeDistribution {
@@ -292,12 +301,10 @@ impl ForgeLibrary {
 pub fn name_to_path(name: &str) -> Result<String, Error> {
     let mut parts = name.split(':');
 
-    let err = format!("Unexpected library name '{}'", name);
-
     let (group_id, artifact_id, version, classifier) = (
-        parts.next().ok_or(Error::new(err.as_str()))?,
-        parts.next().ok_or(Error::new(err.as_str()))?,
-        parts.next().ok_or(Error::new(err.as_str()))?,
+        parts.next().ok_or(Error::InvalidLibraryName(name.to_string()))?,
+        parts.next().ok_or(Error::InvalidLibraryName(name.to_string()))?,
+        parts.next().ok_or(Error::InvalidLibraryName(name.to_string()))?,
         parts.next().map_or("".to_string(), |c| format!("-{c}"))
     );
 

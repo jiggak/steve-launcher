@@ -16,9 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use anyhow::{Context, Result};
 use futures_util::StreamExt;
 use semver::Version;
-use std::error::Error as StdError;
 use std::{collections::HashMap, io, fs, fs::File, path::Path};
 use reqwest::Client;
 
@@ -44,13 +44,14 @@ impl AssetClient {
         AssetClient { client: Client::new() }
     }
 
-    async fn fetch_json<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T, reqwest::Error> {
-        self.client.get(url)
+    async fn fetch_json<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T> {
+        Ok(self.client.get(url)
             .send().await?
-            .json::<T>().await
+            .error_for_status()?
+            .json::<T>().await?)
     }
 
-    pub async fn download_file(&self, url: &str, file_path: &Path) -> Result<(), Box<dyn StdError>> {
+    pub async fn download_file(&self, url: &str, file_path: &Path) -> Result<()> {
         fs::create_dir_all(file_path.parent().unwrap())?;
 
         let mut stream = self.client.get(url)
@@ -67,52 +68,52 @@ impl AssetClient {
         Ok(())
     }
 
-    pub async fn get_mc_version_manifest(&self) -> Result<VersionManifest, reqwest::Error> {
+    pub async fn get_mc_version_manifest(&self) -> Result<VersionManifest> {
         self.fetch_json::<VersionManifest>(VERSION_MANIFEST_URL).await
     }
 
-    pub async fn get_game_manifest_json(&self, mc_version: &str) -> Result<String, Box<dyn StdError>> {
+    pub async fn get_game_manifest_json(&self, mc_version: &str) -> Result<String> {
         let manifest = self.get_mc_version_manifest().await?;
 
         let version = manifest.versions.iter()
             .find(|v| v.id == mc_version)
-            .ok_or(Error::new("Minecraft version not found"))?;
+            .ok_or(Error::MinecraftVersionNotFound(mc_version.to_string()))?;
 
         Ok(self.client.get(&version.url)
             .send().await?
             .text().await?)
     }
 
-    pub async fn get_asset_manfiest(&self, url: &str) -> Result<AssetManifest, Box<dyn StdError>> {
+    pub async fn get_asset_manfiest(&self, url: &str) -> Result<AssetManifest> {
         Ok(self.fetch_json(url).await?)
     }
 
-    pub async fn get_forge_manifest_json(&self, forge_version: &str) -> Result<String, Box<dyn StdError>> {
+    pub async fn get_forge_manifest_json(&self, forge_version: &str) -> Result<String> {
         let index: ForgeVersionManifest = self.fetch_json(FORGE_INDEX_URL).await?;
 
         index.versions.iter()
             .find(|v| v.version == forge_version)
-            .ok_or(Error::new(format!("Forge version '{forge_version}' not found")))?;
+            .ok_or(Error::ForgeVersionNotFound(forge_version.to_string()))?;
 
         Ok(self.client.get(FORGE_INDEX_URL.replace("index.json", format!("{forge_version}.json").as_str()))
             .send().await?
             .text().await?)
     }
 
-    pub async fn get_forge_versions(&self, mc_version: &str) -> Result<Vec<ForgeVersion>, Box<dyn StdError>> {
+    pub async fn get_forge_versions(&self, mc_version: &str) -> Result<Vec<ForgeVersion>> {
         let index: ForgeVersionManifest = self.fetch_json(FORGE_INDEX_URL).await?;
 
         let mut versions = index.versions.iter()
             .filter(|v| v.is_for_mc_version(mc_version))
             .map(|f| ForgeVersion::new(&f.version, f.recommended))
-            .collect::<Result<Vec<ForgeVersion>, Error>>()?;
+            .collect::<Result<Vec<ForgeVersion>>>()?;
 
         versions.sort_by(|a, b| b.version.cmp(&a.version));
 
         Ok(versions)
     }
 
-    pub async fn get_curseforge_file_list(&self, file_ids: &Vec<u64>) -> Result<Vec<CurseForgeFile>, Box<dyn StdError>> {
+    pub async fn get_curseforge_file_list(&self, file_ids: &Vec<u64>) -> Result<Vec<CurseForgeFile>> {
         let response = self.client.post(CURSE_MOD_FILES_URL)
             .header("x-api-key", env::get_curse_api_key())
             .json(&HashMap::from([("fileIds", file_ids)]))
@@ -127,7 +128,7 @@ impl AssetClient {
         Ok(data)
     }
 
-    pub async fn get_curseforge_mods(&self, mod_ids: &Vec<u64>) -> Result<Vec<CurseForgeMod>, Box<dyn StdError>> {
+    pub async fn get_curseforge_mods(&self, mod_ids: &Vec<u64>) -> Result<Vec<CurseForgeMod>> {
         let response = self.client.post(CURSE_MODS_URL)
             .header("x-api-key", env::get_curse_api_key())
             .json(&HashMap::from([("modIds", mod_ids)]))
@@ -138,7 +139,7 @@ impl AssetClient {
         Ok(response.data)
     }
 
-    pub async fn get_ftb_modpack_versions(&self, pack_id: u32) -> Result<ModpackManifest, Box<dyn StdError>> {
+    pub async fn get_ftb_modpack_versions(&self, pack_id: u32) -> Result<ModpackManifest> {
         let response = self.client.get(format!("{MODPACKS_CH_URL}/modpack/{pack_id}"))
             .send().await?
             .error_for_status()?
@@ -147,7 +148,7 @@ impl AssetClient {
         Ok(response)
     }
 
-    pub async fn get_ftb_modpack(&self, pack_id: u32, version_id: u32) -> Result<ModpackVersionManifest, Box<dyn StdError>> {
+    pub async fn get_ftb_modpack(&self, pack_id: u32, version_id: u32) -> Result<ModpackVersionManifest> {
         let response = self.client.get(format!("{MODPACKS_CH_URL}/modpack/{pack_id}/{version_id}"))
             .send().await?
             .error_for_status()?
@@ -156,7 +157,7 @@ impl AssetClient {
         Ok(response)
     }
 
-    pub async fn get_curse_modpack_versions(&self, pack_id: u32) -> Result<ModpackManifest, Box<dyn StdError>> {
+    pub async fn get_curse_modpack_versions(&self, pack_id: u32) -> Result<ModpackManifest> {
         let response = self.client.get(format!("{MODPACKS_CH_URL}/curseforge/{pack_id}"))
             .send().await?
             .error_for_status()?
@@ -165,7 +166,7 @@ impl AssetClient {
         Ok(response)
     }
 
-    pub async fn get_curse_modpack(&self, pack_id: u32, version_id: u32) -> Result<ModpackVersionManifest, Box<dyn StdError>> {
+    pub async fn get_curse_modpack(&self, pack_id: u32, version_id: u32) -> Result<ModpackVersionManifest> {
         let response = self.client.get(format!("{MODPACKS_CH_URL}/curseforge/{pack_id}/{version_id}"))
             .send().await?
             .error_for_status()?
@@ -175,7 +176,7 @@ impl AssetClient {
     }
 
     /// * `limit` - Search result limit, max 50
-    pub async fn search_modpacks(&self, term: &str, limit: u8) -> Result<ModpackSearch, Box<dyn StdError>> {
+    pub async fn search_modpacks(&self, term: &str, limit: u8) -> Result<ModpackSearch> {
         // 50 appears to be max, i.e. setting limit to 99 but response includes "limit: 50"
         let response = self.client.get(format!("{MODPACKS_CH_URL}/modpack/search/{limit}?term={term}"))
             .send().await?
@@ -201,12 +202,13 @@ pub struct ForgeVersion {
 }
 
 impl ForgeVersion {
-    pub fn new(version: &str, recommended: bool) -> Result<Self, Error> {
+    pub fn new(version: &str, recommended: bool) -> Result<Self> {
         Ok(ForgeVersion {
             recommended,
             sversion: version.to_string(),
             version: lenient_semver::parse(version)
-                .map_err(|e| Error::new(format!("{}", e)))?
+                .map_err(|_| Error::VersionParse { version: version.into() })
+                .with_context(|| format!("Unable to parse forge SemVer '{version}'"))?
         })
     }
 }
