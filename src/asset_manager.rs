@@ -157,13 +157,9 @@ impl AssetManager {
         game_manifest: &GameManifest,
         progress: &mut dyn Progress
     ) -> Result<()> {
-        // FIXME refactor GameManifest ot use struct with `client` property
-        let client = game_manifest.downloads.get("client")
-            .expect("Missing 'client' key in downloads object");
-
         let client_path = get_client_jar_path(&game_manifest.id);
         let mut lib_downloads: Vec<(&str, &String)> = vec![
-            (client_path.as_str(), &client.url)
+            (client_path.as_str(), &game_manifest.downloads.client.url)
         ];
 
         lib_downloads.extend(

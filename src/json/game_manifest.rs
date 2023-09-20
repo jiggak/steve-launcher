@@ -29,7 +29,7 @@ pub struct GameManifest {
     pub assets: String,
     #[serde(rename(deserialize = "complianceLevel"))]
     pub compliance_level: Option<u8>,
-    pub downloads: HashMap<String, AssetDownload>,
+    pub downloads: GameDownloads,
     pub id: String,
     #[serde(rename(deserialize = "javaVersion"))]
     pub java_version: Option<GameJavaVersion>,
@@ -135,6 +135,15 @@ pub struct GameAssetIndex {
     pub download: AssetDownload,
     #[serde(rename(deserialize = "totalSize"))]
     pub total_size: u64
+}
+
+#[derive(Deserialize)]
+pub struct GameDownloads {
+    pub client: AssetDownload,
+    pub client_mappings: Option<AssetDownload>,
+    pub server: Option<AssetDownload>,
+    pub server_mappings: Option<AssetDownload>,
+    pub server_windows: Option<AssetDownload>
 }
 
 #[derive(Deserialize)]
