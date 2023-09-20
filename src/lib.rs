@@ -65,7 +65,11 @@ pub enum Error {
     CurseFileListMismatch {
         file_list_len: usize,
         mod_list_len: usize
-    }
+    },
+    #[error("Instance directory '{0}' not found or doesn't contain manifest.json file")]
+    InstanceNotFound(String),
+    #[error("Account credentials not found, run authenticate to save credentials")]
+    CredentialNotFound
 }
 
 pub trait Progress {

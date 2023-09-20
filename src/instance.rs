@@ -217,6 +217,10 @@ impl Instance {
 
     pub fn load(instance_dir: &Path) -> Result<Instance> {
         let manifest_path = instance_dir.join(MANIFEST_FILE);
+        if !manifest_path.exists() {
+            bail!(Error::InstanceNotFound(instance_dir.to_str().unwrap().to_string()))
+        }
+
         let json = fs::read_to_string(manifest_path)?;
         let manifest = serde_json::from_str::<InstanceManifest>(json.as_str())?;
 

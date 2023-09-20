@@ -32,7 +32,7 @@ use oauth2::{
     basic::BasicClient, basic::BasicTokenType, reqwest::async_http_client
 };
 
-use crate::env;
+use crate::{env, Error};
 use crate::json::{AccountManifest, MicrosoftToken, MinecraftToken, MinecraftProfile};
 
 pub struct Account {
@@ -53,7 +53,8 @@ impl Account {
     }
 
     pub fn load() -> Result<Self> {
-        let json = Self::keyring_entry()?.get_password()?;
+        let json = Self::keyring_entry()?.get_password()
+            .map_err(|_| Error::CredentialNotFound)?;
 
         Ok(Account {
             manifest: serde_json::from_str::<AccountManifest>(&json)?
