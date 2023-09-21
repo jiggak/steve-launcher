@@ -22,7 +22,9 @@ mod launch;
 mod modpack;
 
 pub use {
+    auth::clear_credentials,
     auth::msal_login,
+    auth::print_account_status,
     create::create_instance,
     launch::launch_instance,
     modpack::modpack_search_and_install,

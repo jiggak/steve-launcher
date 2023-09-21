@@ -58,7 +58,10 @@ pub enum Commands {
     },
 
     /// Authenticate with your Microsoft account and save account details
-    Auth,
+    Auth {
+        #[clap(subcommand)]
+        command: Option<AuthCommands>
+    },
 
     /// Install CurseForge modpack zip into new or existing instance
     Import {
@@ -81,4 +84,13 @@ pub enum Commands {
         #[arg(short, long, default_value_t = 5, value_parser = clap::value_parser!(u8).range(1..50))]
         search_limit: u8
     }
+}
+
+#[derive(Subcommand)]
+pub enum AuthCommands {
+    /// Print information about the stored account details
+    Status,
+
+    /// Delete stored account details
+    Clear
 }

@@ -21,7 +21,7 @@
  */
 
 use anyhow::Result;
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
@@ -59,6 +59,10 @@ impl Account {
         Ok(Account {
             manifest: serde_json::from_str::<AccountManifest>(&json)?
         })
+    }
+
+    pub fn clear() -> Result<()> {
+        Ok(Self::keyring_entry()?.delete_password()?)
     }
 
     pub async fn load_with_tokens() -> Result<Self> {
@@ -102,6 +106,14 @@ impl Account {
 
     pub async fn fetch_profile(&self) -> Result<MinecraftProfile> {
         get_profile(&self.manifest.mc_token.access_token).await
+    }
+
+    pub fn msa_token_expires(&self) -> &DateTime<Utc> {
+        &self.manifest.msa_token.expires
+    }
+
+    pub fn mc_token_expires(&self) -> &DateTime<Utc> {
+        &self.manifest.mc_token.expires
     }
 }
 

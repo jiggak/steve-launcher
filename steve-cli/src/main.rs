@@ -23,10 +23,10 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use std::{io, path::{Path, PathBuf}};
 
 use cmds::{
-    create_instance, launch_instance, msal_login, modpack_search_and_install,
-    modpack_zip_install
+    clear_credentials, create_instance, launch_instance, msal_login,
+    modpack_search_and_install, modpack_zip_install, print_account_status
 };
-use cli::{Parser, Cli, Commands};
+use cli::{AuthCommands, Parser, Cli, Commands};
 use steve::{env, Progress};
 
 #[tokio::main(flavor = "current_thread")]
@@ -48,8 +48,15 @@ async fn main() -> anyhow::Result<()> {
 
             launch_instance(&instance_dir).await
         },
-        Commands::Auth => {
-            msal_login().await
+        Commands::Auth { command } => {
+            if let Some(command) = command {
+                match command {
+                    AuthCommands::Status => print_account_status(),
+                    AuthCommands::Clear => clear_credentials()
+                }
+            } else {
+                msal_login().await
+            }
         },
         Commands::Import { dir, zip_file } => {
             let instance_dir = absolute_path(&dir)?;
