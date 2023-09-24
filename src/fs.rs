@@ -1,5 +1,6 @@
 use std::{fs, io, path::Path};
 
+/// Copy all files recursively from the source directory to destination directory
 pub fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
     fs::create_dir_all(&dst)?;
 
@@ -16,6 +17,7 @@ pub fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<
     Ok(())
 }
 
+/// Iterate and copy `src_files` to `dst` directory
 pub fn copy_files<I, P>(src_files: I, dst: P) -> io::Result<()>
     where I: Iterator, I::Item: AsRef<Path>, P: AsRef<Path>
 {

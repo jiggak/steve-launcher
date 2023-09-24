@@ -279,8 +279,36 @@ impl AssetManager {
     }
 }
 
+/// Get path of minecraft client jar relative to shared libs directory
 pub fn get_client_jar_path(mc_version: &str) -> String {
     format!("com/mojang/minecraft/{mc_version}/minecraft-{mc_version}-client.jar")
+}
+
+/// Make modded minecraft jar with forge, if it doesn't already exist, and
+/// return the path of the modded jar
+pub fn make_forge_modded_jar(
+    mc_jar_path: &String, forge_version: &String, jar_mods: &Vec<ForgeLibrary>
+) -> Result<PathBuf> {
+    let modded_jar = format!("minecraft+forge-{}.jar", forge_version);
+    let modded_jar_path = env::get_cache_dir().join(&modded_jar);
+    if !modded_jar_path.exists() {
+        // path to vanilla `minecraft.jar`
+        let mc_jar_path = env::get_libs_dir().join(&mc_jar_path);
+
+        // map forge jar_mods asset library paths
+        let jar_mods: Vec<_> = jar_mods.iter()
+            .map(|jar| env::get_libs_dir().join(jar.asset_path()))
+            .collect();
+
+        // create the modified `minecraft.jar`
+        zip::make_modded_jar(
+            &modded_jar_path,
+            &mc_jar_path,
+            jar_mods.iter().map(|p| p.as_path())
+        )?;
+    }
+
+    Ok(modded_jar_path)
 }
 
 pub fn dedup_libs(libs: &[String]) -> Result<Vec<&String>> {

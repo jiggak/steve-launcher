@@ -18,16 +18,18 @@
 
 use anyhow::{bail, Result};
 use std::{
-    collections::HashMap, fs, path::{Path, PathBuf}, process::Child, process::Command
+    collections::HashMap, fs, path::{Path, PathBuf}, process::{Child, Command}
 };
 
 use crate::{
-    account::Account, asset_client::AssetClient, asset_manager::{self, AssetManager},
+    account::Account, asset_client::AssetClient, asset_manager::{
+        self, AssetManager, get_client_jar_path, make_forge_modded_jar
+    },
     CurseForgeZip, env, Error, json::{
         CurseForgeFile, CurseForgeMod, ForgeDistribution, InstanceManifest,
         ModpackVersionManifest
     },
-    Progress, zip
+    Progress
 };
 
 const MANIFEST_FILE: &str = "manifest.json";
@@ -309,55 +311,23 @@ impl Instance {
             None
         };
 
-        if let Some(target_dir) = &resources_dir {
-            assets.copy_resources(&asset_manifest, target_dir, progress)?;
+        if let Some(resources_dir) = &resources_dir {
+            assets.copy_resources(&asset_manifest, resources_dir, progress)?;
         }
 
         assets.extract_natives(&game_manifest, &self.natives_dir(), progress)?;
 
-        // use java override path from instance manifest, or default to "java" in PATH
-        let mut cmd = if let Some(java_path) = &self.manifest.java_path {
-            Command::new(java_path)
-        } else {
-            Command::new("java")
-        };
-
-        if let Some(java_args) = &self.manifest.java_args {
-            cmd.args(java_args);
-        }
-
-        // set current directory for log output
-        cmd.current_dir(self.game_dir());
-
+        let mut cmd = LaunchCommand::new(self);
         fs::create_dir_all(self.game_dir())?;
 
-        let mut cmd_args: Vec<String> = vec![];
-        let mut main_jar: String = asset_manager::get_client_jar_path(&game_manifest.id);
+        let mut main_jar: String = get_client_jar_path(&game_manifest.id);
 
         if let Some(forge_manifest) = &forge_manifest {
             match &forge_manifest.dist {
                 // legacy forge distributions required modifying the `minecraft.jar` file
                 ForgeDistribution::Legacy { jar_mods, fml_libs } => {
-                    let modded_jar = format!("minecraft+forge-{}.jar", forge_manifest.version);
-                    let modded_jar_path = env::get_cache_dir().join(&modded_jar);
-                    if !modded_jar_path.exists() {
-                        // path to vanilla `minecraft.jar`
-                        let mc_jar_path = env::get_libs_dir().join(&main_jar);
-
-                        // map forge jar_mods asset library paths
-                        let jar_mods: Vec<_> = jar_mods.iter()
-                            .map(|jar| env::get_libs_dir().join(jar.asset_path()))
-                            .collect();
-
-                        // create the modified `minecraft.jar`
-                        zip::make_modded_jar(
-                            &modded_jar_path,
-                            &mc_jar_path,
-                            jar_mods.iter().map(|p| p.as_path())
-                        )?;
-                    }
-
-                    main_jar = modded_jar_path.to_string_lossy().to_string();
+                    main_jar = make_forge_modded_jar(&main_jar, &forge_manifest.version, &jar_mods)
+                        ?.to_string_lossy().to_string();
 
                     // forge will throw an error on startup attempting to download
                     // these libraries (404 not found), unless they already exist
@@ -369,48 +339,51 @@ impl Instance {
                         )?;
                     }
 
-                    cmd_args.push("-Dminecraft.applet.TargetDirectory=${game_directory}".to_string());
-                    cmd_args.push("-Djava.library.path=${natives_directory}".to_string());
-                    cmd_args.push("-Dfml.ignoreInvalidMinecraftCertificates=true".to_string());
-                    cmd_args.push("-Dfml.ignorePatchDiscrepancies=true".to_string());
-                    cmd_args.extend(["-cp".to_string(), "${classpath}".to_string()]);
-                    cmd_args.push(game_manifest.main_class);
+                    cmd.arg("-Dminecraft.applet.TargetDirectory=${game_directory}");
+                    cmd.arg("-Djava.library.path=${natives_directory}");
+                    cmd.arg("-Dfml.ignoreInvalidMinecraftCertificates=true");
+                    cmd.arg("-Dfml.ignorePatchDiscrepancies=true");
+                    cmd.arg("-cp").arg("${classpath}");
+                    cmd.arg(game_manifest.main_class);
 
                     if let Some(args) = game_manifest.minecraft_arguments {
-                        cmd_args.extend(args.split(' ').map(|v| v.to_string()));
+                        cmd.args(args.split(' '));
                     }
                 },
                 ForgeDistribution::Current { main_class, minecraft_arguments, .. } => {
-                    cmd_args.push("-Djava.library.path=${natives_directory}".to_string());
-                    cmd_args.extend(["-cp".to_string(), "${classpath}".to_string()]);
-                    cmd_args.push(main_class.clone());
+                    cmd.arg("-Djava.library.path=${natives_directory}");
+                    cmd.arg("-cp").arg("${classpath}");
+                    cmd.arg(main_class);
 
                     if let Some(args) = minecraft_arguments {
-                        cmd_args.extend(args.split(' ').map(|v| v.to_string()));
+                        cmd.args(args.split(' '));
                     } else if let Some(args) = game_manifest.minecraft_arguments {
-                        cmd_args.extend(args.split(' ').map(|v| v.to_string()));
+                        cmd.args(args.split(' '));
                     }
                 }
             }
 
             if let Some(tweaks) = &forge_manifest.tweakers {
-                cmd_args.extend(["--tweakClass".to_string(), tweaks[0].clone()]);
+                cmd.arg("--tweakClass").arg(tweaks.first().unwrap());
             }
 
         // newer versions of minecraft
         } else if let Some(args) = game_manifest.arguments {
-            cmd_args.extend(args.jvm.matched_args());
-            cmd_args.push(game_manifest.main_class);
-            cmd_args.extend(args.game.matched_args());
+            cmd.args(args.jvm.matched_args());
+            cmd.arg(game_manifest.main_class);
+            cmd.args(args.game.matched_args());
 
         // older version of minecraft
         } else if let Some(args) = game_manifest.minecraft_arguments {
             // older version don't include JVM args in manifest
-            cmd_args.push("-Djava.library.path=${natives_directory}".to_string());
-            cmd_args.extend(["-cp".to_string(), "${classpath}".to_string()]);
-            cmd_args.push(game_manifest.main_class);
-            cmd_args.extend(args.split(' ').map(|v| v.to_string()));
+            cmd.arg("-Djava.library.path=${natives_directory}");
+            cmd.arg("-cp").arg("${classpath}");
+            cmd.arg(game_manifest.main_class);
+            cmd.args(args.split(' '));
         }
+
+        cmd.arg("--width").arg("854");
+        cmd.arg("--height").arg("480");
 
         let mut libs = vec![main_jar];
 
@@ -433,46 +406,94 @@ impl Instance {
         let classpath = std::env::join_paths(
             asset_manager::dedup_libs(&libs)?.iter()
                 .map(|p| env::get_libs_dir().join(p))
-        )?.into_string().unwrap();
+        )?;
 
-        let game_dir = self.game_dir();
-        let natives_dir = self.natives_dir();
+        let auth_session = format!("token:{token}:{profileId}",
+            token = account.access_token(), profileId = profile.id);
 
-        let mut arg_ctx = HashMap::from([
-            ("version_name", self.manifest.mc_version.clone()),
-            ("version_type", game_manifest.release_type),
-            ("game_directory", game_dir.to_str().unwrap().into()),
-            ("assets_root", env::get_assets_dir().to_str().unwrap().into()),
-            ("assets_index_name", game_manifest.asset_index.id),
-            ("classpath", classpath),
-            ("natives_directory", natives_dir.to_str().unwrap().into()),
-            ("user_type", "msa".into()),
-            ("clientid", env::get_msa_client_id()),
-            ("auth_access_token", account.access_token().into()),
-            ("auth_session", format!("token:{token}:{profileId}",
-                token = account.access_token(), profileId = profile.id)),
-            ("auth_player_name", profile.name),
-            ("auth_uuid", profile.id),
-            ("launcher_name", env::get_package_name().into()),
-            ("launcher_version", env::get_package_version().into()),
-            // no idea what this arg does but MC fails to launch unless set to empty json obj
-            ("user_properties", "{}".into())
-        ]);
+        cmd.arg_ctx("version_name", &self.manifest.mc_version);
+        cmd.arg_ctx("version_type", game_manifest.release_type);
+        cmd.arg_ctx("game_directory", self.game_dir().to_string_lossy());
+        cmd.arg_ctx("assets_root", env::get_assets_dir().to_string_lossy());
+        cmd.arg_ctx("assets_index_name", game_manifest.asset_index.id);
+        cmd.arg_ctx("classpath", classpath.to_string_lossy());
+        cmd.arg_ctx("natives_directory", self.natives_dir().to_string_lossy());
+        cmd.arg_ctx("user_type", "msa");
+        cmd.arg_ctx("clientid", env::get_msa_client_id());
+        cmd.arg_ctx("auth_access_token", account.access_token());
+        cmd.arg_ctx("auth_session", auth_session);
+        cmd.arg_ctx("auth_player_name", profile.name);
+        cmd.arg_ctx("auth_uuid", profile.id);
+        cmd.arg_ctx("launcher_name", env::get_package_name());
+        cmd.arg_ctx("launcher_version", env::get_package_version());
+        // no idea what this arg does but MC fails to launch unless set to empty json obj
+        cmd.arg_ctx("user_properties", "{}");
 
         if let Some(path) = &resources_dir {
-            arg_ctx.insert("game_assets", path.to_str().unwrap().into());
+            cmd.arg_ctx("game_assets", path.to_string_lossy());
         }
 
-        for arg in cmd_args {
-            cmd.arg(
+        Ok(cmd.spawn()?)
+    }
+}
+
+struct LaunchCommand {
+    cmd: Command,
+    ctx: HashMap<&'static str, String>,
+    args: Vec<String>
+}
+
+impl LaunchCommand {
+    fn new(instance: &Instance) -> Self {
+        // use java override path from instance manifest, or default to "java" in PATH
+        let mut cmd = if let Some(path) = &instance.manifest.java_path {
+            Command::new(path)
+        } else {
+            Command::new("java")
+        };
+
+        if let Some(args) = &instance.manifest.java_args {
+            cmd.args(args);
+        }
+
+        // set current directory for log output
+        cmd.current_dir(instance.game_dir());
+
+        Self {
+            cmd: cmd,
+            ctx: HashMap::new(),
+            args: Vec::new()
+        }
+    }
+
+    fn arg_ctx<S: Into<String>>(&mut self, key: &'static str, val: S) -> &mut Self {
+        self.ctx.insert(key, val.into());
+        self
+    }
+
+    fn arg<S: Into<String>>(&mut self, val: S) -> &mut Self {
+        self.args.push(val.into());
+        self
+    }
+
+    fn args<I>(&mut self, iter: I) -> &mut Self
+        where I: IntoIterator, I::Item: Into<String>
+    {
+        iter.into_iter().for_each(|v| self.args.push(v.into()));
+        self
+    }
+
+    fn spawn(&mut self) -> std::io::Result<Child> {
+        for arg in &self.args {
+            self.cmd.arg(
                 shellexpand::env_with_context_no_errors(
                     &arg,
-                    |var:&str| arg_ctx.get(var)
+                    |var:&str| self.ctx.get(var)
                 ).to_string()
             );
         }
 
-        Ok(cmd.spawn()?)
+        self.cmd.spawn()
     }
 }
 
