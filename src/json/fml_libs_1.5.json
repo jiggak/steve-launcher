@@ -1,0 +1,57 @@
+[
+   {
+       "name": "fmllibs:argo-small:3.2",
+       "downloads": {
+           "artifact": {
+               "path": "fmllibs/argo-small-3.2.jar",
+               "sha1": "58912ea2858d168c50781f956fa5b59f0f7c6b51",
+               "size": 91333,
+               "url": "https://files.prismlauncher.org/fmllibs/argo-small-3.2.jar"
+           }
+       }
+   },
+   {
+       "name": "fmllibs:guava:14.0:rc3",
+       "downloads": {
+           "artifact": {
+               "path": "fmllibs/guava-14.0-rc3.jar",
+               "sha1": "931ae21fa8014c3ce686aaa621eae565fefb1a6a",
+               "size": 2189140,
+               "url": "https://files.prismlauncher.org/fmllibs/guava-14.0-rc3.jar"
+           }
+       }
+   },
+   {
+       "name": "fmllibs:asm-all:4.1",
+       "downloads": {
+           "artifact": {
+               "path": "fmllibs/asm-all-4.1.jar",
+               "sha1": "054986e962b88d8660ae4566475658469595ef58",
+               "size": 214592,
+               "url": "https://files.prismlauncher.org/fmllibs/asm-all-4.1.jar"
+           }
+       }
+   },
+   {
+       "name": "fmllibs:bcprov-jdk15on:148",
+       "downloads": {
+           "artifact": {
+               "path": "fmllibs/bcprov-jdk15on-148.jar",
+               "sha1": "960dea7c9181ba0b17e8bab0c06a43f0a5f04e65",
+               "size": 2318161,
+               "url": "https://files.prismlauncher.org/fmllibs/bcprov-jdk15on-148.jar"
+           }
+       }
+   },
+   {
+       "name": "fmllibs:scala-library",
+       "downloads": {
+           "artifact": {
+               "path": "fmllibs/scala-library.jar",
+               "sha1": "458d046151ad179c85429ed7420ffb1eaf6ddf85",
+               "size": 7114640,
+               "url": "https://files.prismlauncher.org/fmllibs/scala-library.jar"
+           }
+       }
+   }
+]

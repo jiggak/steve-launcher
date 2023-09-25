@@ -1,0 +1,11 @@
+{
+   "name": "fmllibs:deobfuscation_data:1.5",
+   "downloads": {
+       "artifact": {
+           "path": "fmllibs/deobfuscation_data_1.5.zip",
+           "sha1": "5f7c142d53776f16304c0bbe10542014abad6af8",
+           "size": 200547,
+           "url": "https://files.prismlauncher.org/fmllibs/deobfuscation_data_1.5.zip"
+       }
+   }
+}
