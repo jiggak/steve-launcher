@@ -90,7 +90,8 @@ impl Instance {
                 game_dir: "minecraft".to_string(),
                 java_path: None,
                 java_args: None,
-                forge_version
+                forge_version,
+                custom_jar: None
             }
         )?;
 
@@ -384,6 +385,10 @@ impl Instance {
 
         cmd.arg("--width").arg("854");
         cmd.arg("--height").arg("480");
+
+        if let Some(custom_jar) = &self.manifest.custom_jar {
+            main_jar = self.dir.join(custom_jar).to_string_lossy().to_string();
+        }
 
         let mut libs = vec![main_jar];
 

@@ -20,9 +20,21 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
 pub struct InstanceManifest {
+    /// Minecraft version
     pub mc_version: String,
+
+    /// Minecraft directory, relative to instance manifest
     pub game_dir: String,
+
+    /// Optional absolute path of Java VM, or use "java" in system path
     pub java_path: Option<String>,
+
+    /// Optional extra JVM arguments
     pub java_args: Option<Vec<String>>,
-    pub forge_version: Option<String>
+
+    /// Optional Forge version
+    pub forge_version: Option<String>,
+
+    /// Optional path to alternate `minecraft.jar`, relative to instance manifest
+    pub custom_jar: Option<String>
 }
