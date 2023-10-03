@@ -37,7 +37,7 @@ fn console_theme() -> ColorfulTheme {
     ColorfulTheme::default()
 }
 
-fn prompt_confirm<S: Into<String>>(prompt: S) -> std::io::Result<bool> {
+fn prompt_confirm<S: Into<String>>(prompt: S) -> dialoguer::Result<bool> {
     Confirm::with_theme(&console_theme())
         .with_prompt(prompt)
         .wait_for_newline(true)

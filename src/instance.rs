@@ -104,7 +104,7 @@ impl Instance {
     pub async fn install_pack_zip(&self,
         pack: &CurseForgeZip,
         progress: &mut dyn Progress
-    ) -> Result<Option<Vec<FileDownload>>> {
+    ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
         // copy pack overrides to minecraft dir
         pack.copy_game_data(&self.game_dir())?;
 
@@ -118,7 +118,7 @@ impl Instance {
     pub async fn install_pack(&self,
         pack: &ModpackVersionManifest,
         progress: &mut dyn Progress
-    ) -> Result<Option<Vec<FileDownload>>> {
+    ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
         let client = AssetClient::new();
 
         let assets: Vec<_> = pack.files.iter()
@@ -171,7 +171,7 @@ impl Instance {
         file_ids: Vec<u64>,
         project_ids: Vec<u64>,
         progress: &mut dyn Progress
-    ) -> Result<Option<Vec<FileDownload>>> {
+    ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
         let mut file_list = client.get_curseforge_file_list(&file_ids).await?;
         let mut mod_list = client.get_curseforge_mods(&project_ids).await?;
 
@@ -186,9 +186,13 @@ impl Instance {
         file_list.sort_by(|a, b| a.mod_id.cmp(&b.mod_id));
         mod_list.sort_by(|a, b| a.mod_id.cmp(&b.mod_id));
 
-        // filter files that can be auto-downloaded, and those that must be manually downloaded
-        let (downloads, blocked): (Vec<_>, Vec<_>) = file_list.iter().zip(mod_list)
+        let file_downloads: Vec<_> = file_list.iter()
+            .zip(mod_list)
             .map(|(f, m)| FileDownload::new(f, &m))
+            .collect();
+
+        // filter files that can be auto-downloaded, and those that must be manually downloaded
+        let (downloads, blocked): (Vec<_>, Vec<_>) = file_downloads.clone().into_iter()
             .partition(|f| f.can_auto_download);
 
         progress.begin("Downloading mods...", downloads.len());
@@ -211,10 +215,16 @@ impl Instance {
 
         progress.end();
 
+        let delete_files = [
+            list_extra_files(&self.mods_dir(), &file_downloads)?,
+            list_extra_files(&self.resource_pack_dir(), &file_downloads)?,
+            list_extra_files(&self.shader_pack_dir(), &file_downloads)?
+        ].concat();
+
         if !blocked.is_empty() {
-            Ok(Some(blocked))
+            Ok((delete_files, Some(blocked)))
         } else {
-            Ok(None)
+            Ok((delete_files, None))
         }
     }
 
@@ -502,12 +512,14 @@ impl LaunchCommand {
     }
 }
 
+#[derive(Clone)]
 pub enum FileType {
     Mod,
     Resource,
     Shaders
 }
 
+#[derive(Clone)]
 pub struct FileDownload {
     pub file_name: String,
     pub file_type: FileType,
@@ -540,4 +552,20 @@ impl FileDownload {
             }
         }
     }
+}
+
+fn list_extra_files(dir: &Path, downloads: &Vec<FileDownload>) -> Result<Vec<PathBuf>> {
+    let mut delete_files: Vec<PathBuf> = vec![];
+
+    if dir.exists() {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+
+            if !downloads.iter().any(|f| f.file_name == entry.file_name().to_string_lossy()) {
+                delete_files.push(entry.path());
+            }
+        }
+    }
+
+    Ok(delete_files)
 }

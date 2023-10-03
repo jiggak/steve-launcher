@@ -18,9 +18,9 @@
 
 use anyhow::Result;
 use console::Term;
-use dialoguer::Select;
+use dialoguer::{MultiSelect, Select};
 use std::{
-    io::Result as IoResult, path::Path, process::{Command, Stdio},
+    env, fs, io::Result as IoResult, path::Path, process::{Command, Stdio},
     sync::{Arc, atomic::{AtomicBool, Ordering}, mpsc::{self, Sender}},
     thread::{self, Scope}
 };
@@ -109,11 +109,15 @@ pub async fn modpack_search_and_install(
         ).await?
     };
 
-    let downloads = instance.install_pack(&pack, &mut progress)
+    let (remove, downloads) = instance.install_pack(&pack, &mut progress)
         .await?;
 
     if let Some(downloads) = downloads {
         download_blocked(instance, downloads)?;
+    }
+
+    if !remove.is_empty() {
+        remove_files_prompt(&remove)?;
     }
 
     Ok(())
@@ -148,11 +152,15 @@ pub async fn modpack_zip_install(
         ).await?
     };
 
-    let downloads = instance.install_pack_zip(&pack, &mut progress)
+    let (remove, downloads) = instance.install_pack_zip(&pack, &mut progress)
         .await?;
 
     if let Some(downloads) = downloads {
         download_blocked(instance, downloads)?;
+    }
+
+    if !remove.is_empty() {
+        remove_files_prompt(&remove)?;
     }
 
     Ok(())
@@ -299,4 +307,32 @@ fn format_modpack_versions<'a, I>(items: I) -> Vec<String>
     where I: Iterator<Item = &'a ModpackVersion>
 {
     items.map(|v| v.name.clone()).collect()
+}
+
+fn remove_files_prompt<P>(files: &[P]) -> Result<()>
+    where P: AsRef<Path>
+{
+    let prompt = "Found the following extra files after pack install. \
+These should be removed, unless you added them manually. \
+Toggle files for removal and press enter to continue.";
+
+    let current_dir = env::current_dir()?;
+
+    let options: Vec<_> = files.iter()
+        .map(|p| p.as_ref().strip_prefix(&current_dir).unwrap().to_string_lossy())
+        .collect();
+
+    let select = MultiSelect::with_theme(&console_theme())
+        .with_prompt(prompt)
+        .items(&options)
+        .defaults(&vec![true; files.len()])
+        .report(false)
+        .interact()
+        .unwrap();
+
+    for i in select {
+        fs::remove_file(files[i].as_ref())?;
+    }
+
+    Ok(())
 }

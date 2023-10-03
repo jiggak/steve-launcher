@@ -49,10 +49,9 @@ any files in the pack distribution that match existing files, but leave all othe
 instances files alone. This means it's possible to "update" an existing instance
 to the latest modpack version.
 
-**However**, this does **not** account for files removed from the updated modpack,
-nor does it account for mods updated by the modpack. You can work around this
-problem by manually cleaning up any duplicate mod files, or remove the instance
-"mods" directory before installing the modpack update.
+If the update adds new versions of mods, resource packs, or shader packs, `steve`
+will prompt you to remove the old ones. For mods in particular this is important
+as duplicate versions will cause an error at launch.
 
 # About Shared Data
 
