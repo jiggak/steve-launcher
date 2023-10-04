@@ -83,7 +83,12 @@ pub enum Commands {
         /// Maximum number of search results
         #[arg(short, long, default_value_t = 5, value_parser = clap::value_parser!(u8).range(1..50))]
         search_limit: u8
-    }
+    },
+
+    /// Output bash completion code
+    ///
+    /// eval "$(steve completion)"
+    Completion
 }
 
 #[derive(Subcommand)]

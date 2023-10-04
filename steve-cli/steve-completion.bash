@@ -5,7 +5,7 @@ _steve() {
       local IFS=$'\n'
       COMPREPLY=( $(compgen -d -- "$2") )
    else
-      COMPREPLY=( $(compgen -W "create launch auth import modpack help" -- "$2") )
+      COMPREPLY=( $(compgen -W "auth create launch import modpack completion" -- "$2") )
    fi
 }
 

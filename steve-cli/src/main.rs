@@ -67,6 +67,9 @@ async fn main() -> anyhow::Result<()> {
             let instance_dir = absolute_path(&dir)?;
 
             modpack_search_and_install(&instance_dir, &search, search_limit).await
+        },
+        Commands::Completion => {
+            Ok(print!("{}", include_str!("../steve-completion.bash")))
         }
     }
 }
