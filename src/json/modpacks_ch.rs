@@ -54,7 +54,8 @@ pub struct ModpackManifest {
     pub authors: Vec<ModpackAuthor>,
     pub versions: Vec<ModpackVersion>,
     #[serde(rename(deserialize = "type"))]
-    pub release_type: String
+    pub release_type: String,
+    pub provider: String
 }
 
 #[derive(Deserialize)]

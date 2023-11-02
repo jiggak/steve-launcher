@@ -82,7 +82,7 @@ pub async fn modpack_search_and_install(
 
     let selected_version = &selected_pack.versions[selection];
 
-    let pack = if selected_pack.release_type == "Curseforge" {
+    let pack = if selected_pack.provider == "curseforge" {
         client.get_curse_modpack(selected_pack.pack_id, selected_version.version_id).await?
     } else {
         client.get_ftb_modpack(selected_pack.pack_id, selected_version.version_id).await?
