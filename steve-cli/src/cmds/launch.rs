@@ -22,12 +22,16 @@ use std::path::Path;
 use crate::ProgressHandler;
 use steve::Instance;
 
-pub async fn launch_instance(instance_dir: &Path) -> Result<()> {
+pub async fn launch_instance(instance_dir: &Path, detach: bool) -> Result<()> {
     let mut progress = ProgressHandler::new();
 
     let instance = Instance::load(instance_dir)?;
-    instance.launch(&mut progress)
+    let mut result = instance.launch(&mut progress)
         .await?;
+
+    if !detach {
+        result.wait()?;
+    }
 
     Ok(())
 }

@@ -43,10 +43,10 @@ async fn main() -> anyhow::Result<()> {
 
             create_instance(&instance_dir, mc_version, snapshots, forge).await
         },
-        Commands::Launch { dir } => {
+        Commands::Launch { dir, detach } => {
             let instance_dir = absolute_path(&dir)?;
 
-            launch_instance(&instance_dir).await
+            launch_instance(&instance_dir, detach).await
         },
         Commands::Auth { command } => {
             if let Some(command) = command {

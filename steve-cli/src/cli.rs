@@ -54,7 +54,11 @@ pub enum Commands {
     /// Download instance assets and launch
     Launch {
         /// Path to directory of instance
-        dir: PathBuf
+        dir: PathBuf,
+
+        /// Allow steve to exit while the java process is running
+        #[arg(short)]
+        detach: bool
     },
 
     /// Authenticate with your Microsoft account and save account details
