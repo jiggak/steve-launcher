@@ -46,9 +46,9 @@ pub enum Commands {
         #[arg(long)]
         snapshots: bool,
 
-        /// Enable Forge by setting Forge version or prompt to select from version list
-        #[arg(long, value_name = "FORGE_VERSION", default_missing_value = "prompt", num_args = 0..=1)]
-        forge: Option<String>
+        /// Mod laoder <forge|neoforge>[-<version>], prompt for version when not specified
+        #[arg(long)]
+        loader: Option<String>
     },
 
     /// Download instance assets and launch

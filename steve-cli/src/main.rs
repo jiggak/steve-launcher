@@ -38,10 +38,10 @@ async fn main() -> anyhow::Result<()> {
     }
 
     match cli.command {
-        Commands::Create { dir, mc_version, snapshots, forge } => {
+        Commands::Create { dir, mc_version, snapshots, loader } => {
             let instance_dir = absolute_path(&dir)?;
 
-            create_instance(&instance_dir, mc_version, snapshots, forge).await
+            create_instance(&instance_dir, mc_version, snapshots, loader).await
         },
         Commands::Launch { dir, detach } => {
             let instance_dir = absolute_path(&dir)?;

@@ -36,6 +36,8 @@ pub use {
     download_watcher::WatcherMessage,
     instance::Instance,
     instance::FileDownload,
+    json::ModLoader,
+    json::ModLoaderName,
     json::ModpackManifest,
     json::ModpackVersion
 };
@@ -69,7 +71,11 @@ pub enum Error {
     #[error("Instance directory '{0}' not found or doesn't contain manifest.json file")]
     InstanceNotFound(String),
     #[error("Account credentials not found, run authenticate to save credentials")]
-    CredentialNotFound
+    CredentialNotFound,
+    #[error("Invalid mod loader name '{0}'")]
+    InvalidModLoaderName(String),
+    #[error("Invalid mod loader ID format '{0}'; expected [name]-[version]")]
+    InvalidModLoaderId(String)
 }
 
 pub trait Progress {

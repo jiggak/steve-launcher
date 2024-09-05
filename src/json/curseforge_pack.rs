@@ -18,6 +18,8 @@
 
 use serde::Deserialize;
 
+use crate::{Error, ModLoader};
+
 #[derive(Deserialize)]
 pub struct CurseForgePack {
     pub minecraft: CurseForgeMinecraft,
@@ -54,10 +56,16 @@ pub struct CurseForgeMinecraft {
 }
 
 impl CurseForgeMinecraft {
-    pub fn get_forge_version(&self) -> Option<String> {
-        self.mod_loaders.iter()
-            .find(|l| l.id.starts_with("forge"))
-            .map(|l| l.id.replace("forge-", ""))
+    pub fn get_mod_loader(&self) -> Result<Option<ModLoader>, Error> {
+        let loader_id = self.mod_loaders.iter()
+            .find(|l| l.primary)
+            .map(|l| l.id.as_str());
+
+        if let Some(loader_id) = loader_id {
+            Ok(Some(loader_id.parse()?))
+        } else {
+            Ok(None)
+        }
     }
 }
 

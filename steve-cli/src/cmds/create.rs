@@ -20,40 +20,42 @@ use anyhow::Result;
 use dialoguer::{FuzzySelect, Select};
 use std::path::Path;
 
-use steve::{AssetClient, Instance};
+use steve::{AssetClient, Instance, ModLoader, ModLoaderName};
 
 pub async fn create_instance(
     instance_dir: &Path,
     mc_version: Option<String>,
     snapshots: bool,
-    forge: Option<String>
+    mod_loader: Option<String>
 ) -> Result<()> {
     let mc_version = match mc_version {
         Some(v) => v,
         None => prompt_mc_version(snapshots).await?
     };
 
-    let forge_version = if let Some(forge_version) = forge {
-        if forge_version == "prompt" {
-            Some(prompt_forge_version(&mc_version).await?)
+    let mod_loader = if let Some(mod_loader_id) = mod_loader {
+        if let Ok(mod_loader) = mod_loader_id.parse() {
+            Some(mod_loader)
         } else {
-            Some(forge_version)
+            let name = mod_loader_id.parse::<ModLoaderName>()?;
+            let version = prompt_loader_version(&mc_version, &name).await?;
+            Some(ModLoader { name, version })
         }
     } else {
         None
     };
 
-    Instance::create(instance_dir, &mc_version, forge_version)
+    Instance::create(instance_dir, &mc_version, mod_loader)
         .await?;
 
     Ok(())
 }
 
-async fn prompt_forge_version(mc_version: &str) -> Result<String> {
+async fn prompt_loader_version(mc_version: &str, loader: &ModLoaderName) -> Result<String> {
     let client = AssetClient::new();
 
-    // fetch forge versions for the version of minecraft
-    let versions = client.get_forge_versions(mc_version).await?;
+    // fetch loader versions for the version of minecraft
+    let versions = client.get_loader_versions(mc_version, loader).await?;
 
     // find the index with recommended flag set to `true`
     let recommend_index = versions.iter()
@@ -61,12 +63,12 @@ async fn prompt_forge_version(mc_version: &str) -> Result<String> {
         .unwrap_or(0);
 
     let selection = Select::with_theme(&super::console_theme())
-        .with_prompt("Select Forge version (* recommended version)")
+        .with_prompt(format!("Select {} version (* recommended version)", loader.to_string()))
         .items(&versions)
         .default(recommend_index)
         .interact()?;
 
-    // return the "raw" unparsed version of forge from upstream manifest
+    // return the "raw" unparsed version of mod loader from upstream manifest
     Ok(versions[selection].sversion.to_owned())
 }
 

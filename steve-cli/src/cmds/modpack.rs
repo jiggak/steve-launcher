@@ -95,17 +95,15 @@ pub async fn modpack_search_and_install(
 
         let mut instance = Instance::load(instance_dir)?;
 
-        instance.set_versions(
-            pack.get_minecraft_version()?,
-            pack.get_forge_version()
-        )?;
+        instance.set_mc_version(pack.get_minecraft_version()?)?;
+        instance.set_mod_loader(pack.get_mod_loader()?)?;
 
         instance
     } else {
         Instance::create(
             instance_dir,
             &pack.get_minecraft_version()?,
-            pack.get_forge_version()
+            pack.get_mod_loader()?
         ).await?
     };
 
@@ -138,17 +136,15 @@ pub async fn modpack_zip_install(
 
         let mut instance = Instance::load(instance_dir)?;
 
-        instance.set_versions(
-            pack.manifest.minecraft.version.clone(),
-            pack.manifest.minecraft.get_forge_version()
-        )?;
+        instance.set_mc_version(pack.manifest.minecraft.version.clone())?;
+        instance.set_mod_loader(pack.manifest.minecraft.get_mod_loader()?)?;
 
         instance
     } else {
         Instance::create(
             instance_dir,
             &pack.manifest.minecraft.version,
-            pack.manifest.minecraft.get_forge_version()
+            pack.manifest.minecraft.get_mod_loader()?
         ).await?
     };
 

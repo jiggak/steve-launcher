@@ -23,11 +23,13 @@ prompt you to select the version from a list.
 
     steve create vanilla 1.20.1
 
-To add forge to the instance, pass the `--forge` option. Pass the specific forge
-version, or don't and `steve` will prompt to select a version that matches the
-Minecraft version.
+To add a mod loader to the instance, pass the `--loader` option with the name
+of the mod loader (`forge` or `neoforge`). Pass the specific version, or don't
+and `steve` will prompt to select a version that matches the Minecraft version.
 
-    steve create my_modpack 1.20.1 --forge
+    steve create my_modpack 1.20.1 --loader forge-47.3.7
+    # prompt forge version when version not specified
+    steve create my_modpack 1.20.1 --loader forge
 
 Launch the new instance.
 

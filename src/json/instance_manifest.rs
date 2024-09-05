@@ -17,6 +17,9 @@
  */
 
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
+
+use crate::Error;
 
 #[derive(Deserialize, Serialize)]
 pub struct InstanceManifest {
@@ -32,9 +35,60 @@ pub struct InstanceManifest {
     /// Optional extra JVM arguments
     pub java_args: Option<Vec<String>>,
 
-    /// Optional Forge version
-    pub forge_version: Option<String>,
+    /// Optional mod loader
+    pub mod_loader: Option<ModLoader>,
 
     /// Optional path to alternate `minecraft.jar`, relative to instance manifest
     pub custom_jar: Option<String>
+}
+
+#[derive(Deserialize, Serialize)]
+pub enum ModLoaderName {
+    #[serde(rename = "forge")]
+    Forge,
+
+    #[serde(rename = "neoforge")]
+    NeoForge
+}
+
+impl FromStr for ModLoaderName {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "forge" => Ok(Self::Forge),
+            "neoforge" => Ok(Self::NeoForge),
+            _ => Err(Error::InvalidModLoaderName(s.into()))
+        }
+    }
+}
+
+impl ToString for ModLoaderName {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Forge => String::from("forge"),
+            Self::NeoForge => String::from("neoforge")
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct ModLoader {
+    pub name: ModLoaderName,
+
+    pub version: String
+}
+
+impl FromStr for ModLoader {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts = s.split_once('-')
+            .ok_or(Error::InvalidModLoaderId(s.to_string()))?;
+
+        Ok(ModLoader {
+            name: parts.0.parse()?,
+            version: parts.1.to_string()
+        })
+    }
 }

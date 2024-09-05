@@ -23,7 +23,7 @@ use std::{collections::HashMap, fs, path::Path, path::PathBuf};
 use crate::{asset_client::AssetClient, env, Error, Progress, zip};
 use crate::json::{
     AssetManifest, ForgeDistribution, ForgeLibrary, ForgeManifest, GameLibrary,
-    GameManifest,
+    GameManifest, ModLoader
 };
 
 pub struct AssetManager {
@@ -83,12 +83,17 @@ impl AssetManager {
         Ok(game_manifest)
     }
 
-    pub async fn get_forge_manifest(&self, forge_version: &str) -> Result<ForgeManifest> {
+    pub async fn get_loader_manifest(&self, mod_loader: &ModLoader) -> Result<ForgeManifest> {
+        let file_name = format!("{name}_{ver}.json",
+            name = mod_loader.name.to_string(),
+            ver = mod_loader.version
+        );
+
         let version_file_path = self.versions_dir()
-            .join(format!("forge_{forge_version}.json"));
+            .join(file_name);
 
         if !version_file_path.exists() {
-            let json = self.client.get_forge_manifest_json(forge_version).await?;
+            let json = self.client.get_loader_manifest_json(mod_loader).await?;
 
             fs::write(&version_file_path, json)?;
         }
@@ -182,7 +187,7 @@ impl AssetManager {
         Ok(())
     }
 
-    pub async fn download_forge_libraries(&self,
+    pub async fn download_loader_libraries(&self,
         forge_manifest: &ForgeManifest,
         progress: &mut dyn Progress
     ) -> Result<()> {
@@ -204,7 +209,7 @@ impl AssetManager {
             }
         }
 
-        progress.begin("Downloading forge libraries", downloads.len());
+        progress.begin("Downloading mod loader libraries", downloads.len());
 
         for (i, (path, url)) in downloads.iter().map(|lib| (lib.asset_path(), lib.download_url())).enumerate() {
             progress.advance(i + 1);

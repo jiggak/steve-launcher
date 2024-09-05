@@ -27,7 +27,7 @@ use crate::{
     },
     CurseForgeZip, env, Error, json::{
         CurseForgeFile, CurseForgeMod, ForgeDistribution, InstanceManifest,
-        ModpackVersionManifest
+        ModLoader, ModpackVersionManifest
     },
     Progress
 };
@@ -66,16 +66,16 @@ impl Instance {
     pub async fn create(
         instance_dir: &Path,
         mc_version: &str,
-        forge_version: Option<String>
+        mod_loader: Option<ModLoader>
     ) -> Result<Instance> {
         let assets = AssetManager::new()?;
 
         // validate `mc_version`
         assets.get_game_manifest(mc_version).await?;
 
-        if let Some(forge_version) = &forge_version {
-            // validate `forge_version`
-            assets.get_forge_manifest(forge_version).await?;
+        if let Some(mod_loader) = &mod_loader {
+            // validate `mod_loader`
+            assets.get_loader_manifest(mod_loader).await?;
         }
 
         // create directory to contain instance
@@ -90,7 +90,7 @@ impl Instance {
                 game_dir: "minecraft".to_string(),
                 java_path: None,
                 java_args: None,
-                forge_version,
+                mod_loader,
                 custom_jar: None
             }
         )?;
@@ -240,9 +240,13 @@ impl Instance {
         Instance::new(instance_dir, manifest)
     }
 
-    pub fn set_versions(&mut self, mc_version: String, forge_version: Option<String>) -> Result<()> {
+    pub fn set_mc_version(&mut self, mc_version: String) -> Result<()> {
         self.manifest.mc_version = mc_version;
-        self.manifest.forge_version = forge_version;
+        self.write_manifest()
+    }
+
+    pub fn set_mod_loader(&mut self, mod_loader: Option<ModLoader>) -> Result<()> {
+        self.manifest.mod_loader = mod_loader;
         self.write_manifest()
     }
 
@@ -302,16 +306,16 @@ impl Instance {
         let game_manifest = assets.get_game_manifest(&self.manifest.mc_version).await?;
         let asset_manifest = assets.get_asset_manfiest(&game_manifest).await?;
 
-        let forge_manifest = match &self.manifest.forge_version {
-            Some(forge_version) => Some(assets.get_forge_manifest(forge_version).await?),
+        let loader_manifest = match &self.manifest.mod_loader {
+            Some(mod_loader) => Some(assets.get_loader_manifest(mod_loader).await?),
             None => None
         };
 
         assets.download_assets(&asset_manifest, progress).await?;
         assets.download_libraries(&game_manifest, progress).await?;
 
-        if let Some(forge_manifest) = &forge_manifest {
-            assets.download_forge_libraries(forge_manifest, progress).await?;
+        if let Some(loader_manifest) = &loader_manifest {
+            assets.download_loader_libraries(loader_manifest, progress).await?;
         }
 
         let resources_dir = if asset_manifest.is_virtual.unwrap_or(false) {
@@ -333,11 +337,11 @@ impl Instance {
 
         let mut main_jar: String = get_client_jar_path(&game_manifest.id);
 
-        if let Some(forge_manifest) = &forge_manifest {
-            match &forge_manifest.dist {
+        if let Some(loader_manifest) = &loader_manifest {
+            match &loader_manifest.dist {
                 // legacy forge distributions required modifying the `minecraft.jar` file
                 ForgeDistribution::Legacy { jar_mods, fml_libs } => {
-                    main_jar = make_forge_modded_jar(&main_jar, &forge_manifest.version, &jar_mods)
+                    main_jar = make_forge_modded_jar(&main_jar, &loader_manifest.version, &jar_mods)
                         ?.to_string_lossy().to_string();
 
                     // forge will throw an error on startup attempting to download
@@ -374,7 +378,7 @@ impl Instance {
                 }
             }
 
-            if let Some(tweaks) = &forge_manifest.tweakers {
+            if let Some(tweaks) = &loader_manifest.tweakers {
                 cmd.arg("--tweakClass").arg(tweaks.first().unwrap());
             }
 
@@ -409,8 +413,8 @@ impl Instance {
                 .map(|a| a.path.clone())
         );
 
-        if let Some(forge_manifest) = &forge_manifest {
-            if let ForgeDistribution::Current { libraries, .. } = &forge_manifest.dist {
+        if let Some(loader_manifest) = &loader_manifest {
+            if let ForgeDistribution::Current { libraries, .. } = &loader_manifest.dist {
                 libs.extend(
                     libraries.iter()
                         .map(|lib| lib.asset_path())

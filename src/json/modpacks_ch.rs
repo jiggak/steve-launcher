@@ -18,7 +18,7 @@
 
 use serde::Deserialize;
 
-use super::empty_string_is_none;
+use super::{empty_string_is_none, ModLoader};
 use crate::Error;
 
 // https://api.modpacks.ch/public/modpack/all
@@ -121,10 +121,18 @@ impl ModpackVersionManifest {
             .ok_or(Error::MinecraftTargetNotFound)
     }
 
-    pub fn get_forge_version(&self) -> Option<String> {
-        self.targets.iter()
-            .find(|t| t.name == "forge")
-            .map(|t| t.version.clone())
+    pub fn get_mod_loader(&self) -> Result<Option<ModLoader>, Error> {
+        let mod_loader = self.targets.iter()
+            .find(|t| t.target_type == "modloader");
+
+        if let Some(mod_loader) = mod_loader {
+            Ok(Some(ModLoader {
+                name: mod_loader.name.parse()?,
+                version: mod_loader.version.clone()
+            }))
+        } else {
+            Ok(None)
+        }
     }
 }
 

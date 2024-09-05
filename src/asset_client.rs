@@ -22,7 +22,7 @@ use semver::Version;
 use std::{collections::HashMap, io, fs, fs::File, path::Path};
 use reqwest::Client;
 
-use crate::{env, Error};
+use crate::{env, Error, ModLoader, ModLoaderName};
 use crate::json::{
     AssetManifest, CurseForgeResponse, CurseForgeFile, CurseForgeMod,
     ForgeVersionManifest, ModpackSearch, ModpackManifest, ModpackVersionManifest,
@@ -31,6 +31,7 @@ use crate::json::{
 
 const VERSION_MANIFEST_URL: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 const FORGE_INDEX_URL: &str = "https://meta.prismlauncher.org/v1/net.minecraftforge/index.json";
+const NEOFORGE_INDEX_URL: &str = "https://meta.prismlauncher.org/v1/net.neoforged/index.json";
 const CURSE_MOD_FILES_URL: &str = "https://api.curseforge.com/v1/mods/files";
 const CURSE_MODS_URL: &str = "https://api.curseforge.com/v1/mods";
 const MODPACKS_CH_URL: &str = "https://api.modpacks.ch/public";
@@ -88,25 +89,39 @@ impl AssetClient {
         Ok(self.fetch_json(url).await?)
     }
 
-    pub async fn get_forge_manifest_json(&self, forge_version: &str) -> Result<String> {
-        let index: ForgeVersionManifest = self.fetch_json(FORGE_INDEX_URL).await?;
+    pub async fn get_loader_manifest_json(&self, mod_loader: &ModLoader) -> Result<String> {
+        let url = match mod_loader.name {
+            ModLoaderName::Forge => FORGE_INDEX_URL,
+            ModLoaderName::NeoForge => NEOFORGE_INDEX_URL
+        };
+
+        let index: ForgeVersionManifest = self.fetch_json(url).await?;
 
         index.versions.iter()
-            .find(|v| v.version == forge_version)
-            .ok_or(Error::ForgeVersionNotFound(forge_version.to_string()))?;
+            .find(|v| v.version == mod_loader.version)
+            .ok_or(Error::ForgeVersionNotFound(mod_loader.version.clone()))?;
 
-        Ok(self.client.get(FORGE_INDEX_URL.replace("index.json", format!("{forge_version}.json").as_str()))
+        let file_name = format!("{ver}.json", ver = mod_loader.version);
+        Ok(self.client.get(url.replace("index.json", file_name.as_str()))
             .send().await?
             .text().await?)
     }
 
-    pub async fn get_forge_versions(&self, mc_version: &str) -> Result<Vec<ForgeVersion>> {
-        let index: ForgeVersionManifest = self.fetch_json(FORGE_INDEX_URL).await?;
+    pub async fn get_loader_versions(&self,
+        mc_version: &str,
+        loader: &ModLoaderName
+    ) -> Result<Vec<ModLoaderVersion>> {
+        let url = match loader {
+            ModLoaderName::Forge => FORGE_INDEX_URL,
+            ModLoaderName::NeoForge => NEOFORGE_INDEX_URL
+        };
+
+        let index: ForgeVersionManifest = self.fetch_json(url).await?;
 
         let mut versions = index.versions.iter()
             .filter(|v| v.is_for_mc_version(mc_version))
-            .map(|f| ForgeVersion::new(&f.version, f.recommended))
-            .collect::<Result<Vec<ForgeVersion>>>()?;
+            .map(|f| ModLoaderVersion::new(&f.version, f.recommended))
+            .collect::<Result<Vec<ModLoaderVersion>>>()?;
 
         versions.sort_by(|a, b| b.version.cmp(&a.version));
 
@@ -193,27 +208,27 @@ impl Default for AssetClient {
     }
 }
 
-pub struct ForgeVersion {
+pub struct ModLoaderVersion {
     pub recommended: bool,
-    /// Forge version as string from the version manifest
+    /// Mod loader version as string from the version manifest
     pub sversion: String,
-    /// Forge version parsed as SemVer
+    /// Mod loader version parsed as SemVer
     pub version: Version
 }
 
-impl ForgeVersion {
+impl ModLoaderVersion {
     pub fn new(version: &str, recommended: bool) -> Result<Self> {
-        Ok(ForgeVersion {
+        Ok(ModLoaderVersion {
             recommended,
             sversion: version.to_string(),
             version: lenient_semver::parse(version)
                 .map_err(|_| Error::VersionParse { version: version.into() })
-                .with_context(|| format!("Unable to parse forge SemVer '{version}'"))?
+                .with_context(|| format!("Unable to parse SemVer '{version}'"))?
         })
     }
 }
 
-impl ToString for ForgeVersion {
+impl ToString for ModLoaderVersion {
     fn to_string(&self) -> String {
         if self.recommended {
             format!("{ver} *", ver = self.version)
