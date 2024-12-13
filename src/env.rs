@@ -25,7 +25,7 @@ pub fn set_data_dir(path: &str) {
 
 pub fn get_data_dir() -> PathBuf {
     // get data directory resolve order:
-    // $STEVE_DATA_HOME, $XDG_DATA_HOME/steve, $HOME/share/steve
+    // $STEVE_DATA_HOME, $XDG_DATA_HOME/steve, $HOME/.local/share/steve
     match env::var("STEVE_DATA_HOME") {
         Ok(var) => PathBuf::from(var),
         Err(_) => {

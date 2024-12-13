@@ -17,7 +17,7 @@
  */
 
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 use crate::Error;
 
@@ -34,6 +34,9 @@ pub struct InstanceManifest {
 
     /// Optional extra JVM arguments
     pub java_args: Option<Vec<String>>,
+
+    /// Optional environment variables
+    pub java_env: Option<HashMap<String, String>>,
 
     /// Optional mod loader
     pub mod_loader: Option<ModLoader>,

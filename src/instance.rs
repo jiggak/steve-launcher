@@ -90,6 +90,7 @@ impl Instance {
                 game_dir: "minecraft".to_string(),
                 java_path: None,
                 java_args: None,
+                java_env: None,
                 mod_loader,
                 custom_jar: None
             }
@@ -473,6 +474,10 @@ impl LaunchCommand {
 
         if let Some(args) = &instance.manifest.java_args {
             cmd.args(args);
+        }
+
+        if let Some(vars) = &instance.manifest.java_env {
+            cmd.envs(vars);
         }
 
         // set current directory for log output
