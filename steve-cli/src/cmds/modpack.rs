@@ -20,7 +20,7 @@ use anyhow::Result;
 use console::Term;
 use dialoguer::{MultiSelect, Select};
 use std::{
-    env, fs, io::Result as IoResult, path::Path, process::{Command, Stdio},
+    fs, io::Result as IoResult, path::Path, process::{Command, Stdio},
     sync::{Arc, atomic::{AtomicBool, Ordering}, mpsc::{self, Sender}},
     thread::{self, Scope}
 };
@@ -115,7 +115,7 @@ pub async fn modpack_search_and_install(
     }
 
     if !remove.is_empty() {
-        remove_files_prompt(&remove)?;
+        remove_files_prompt(instance_dir, &remove)?;
     }
 
     Ok(())
@@ -156,7 +156,7 @@ pub async fn modpack_zip_install(
     }
 
     if !remove.is_empty() {
-        remove_files_prompt(&remove)?;
+        remove_files_prompt(instance_dir, &remove)?;
     }
 
     Ok(())
@@ -305,17 +305,15 @@ fn format_modpack_versions<'a, I>(items: I) -> Vec<String>
     items.map(|v| v.name.clone()).collect()
 }
 
-fn remove_files_prompt<P>(files: &[P]) -> Result<()>
-    where P: AsRef<Path>
+fn remove_files_prompt<P, Q>(base: P, files: &[Q]) -> Result<()>
+    where P: AsRef<Path>, Q: AsRef<Path>
 {
     let prompt = "Found the following extra files after pack install. \
 These should be removed, unless you added them manually. \
 Toggle files for removal and press enter to continue.";
 
-    let current_dir = env::current_dir()?;
-
     let options: Vec<_> = files.iter()
-        .map(|p| p.as_ref().strip_prefix(&current_dir).unwrap().to_string_lossy())
+        .map(|p| p.as_ref().strip_prefix(&base).unwrap().to_string_lossy())
         .collect();
 
     let select = MultiSelect::with_theme(&console_theme())

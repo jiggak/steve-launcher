@@ -46,8 +46,20 @@ impl CurseForgeZip {
 }
 
 impl CurseForgeZip {
+    pub fn overrides_dir(&self) -> PathBuf {
+        self.zip_temp_dir.join(&self.manifest.overrides)
+    }
+
     pub fn copy_game_data(&self, game_dir: &Path) -> io::Result<()> {
-        super::fs::copy_dir_all(self.zip_temp_dir.join(&self.manifest.overrides), game_dir)
+        super::fs::copy_dir_all(self.overrides_dir(), game_dir)
+    }
+
+    pub fn list_overrides(&self, dirs: &[&str]) -> io::Result<Vec<PathBuf>> {
+        let overrides_dir = self.overrides_dir();
+        dirs.iter()
+            .map(|d| super::fs::list_files_in_dir(overrides_dir.join(d)))
+            .collect::<io::Result<Vec<_>>>()
+            .map(|vecs| vecs.into_iter().flatten().collect())
     }
 }
 

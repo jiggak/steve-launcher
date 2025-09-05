@@ -108,12 +108,21 @@ impl Instance {
     ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
         // copy pack overrides to minecraft dir
         pack.copy_game_data(&self.game_dir())?;
+        let override_files = pack.list_overrides(&[
+            "mods", "resourcepacks", "shaderpacks"
+        ])?;
 
         let client = AssetClient::new();
         let file_ids = pack.manifest.get_file_ids();
         let project_ids = pack.manifest.get_project_ids();
 
-        self.download_curseforge_files(&client, file_ids, project_ids, progress).await
+        self.download_curseforge_files(
+            &client,
+            file_ids,
+            project_ids,
+            Some(override_files),
+            progress
+        ).await
     }
 
     pub async fn install_pack(&self,
@@ -125,6 +134,8 @@ impl Instance {
         let assets: Vec<_> = pack.files.iter()
             .filter(|f| f.url.is_some())
             .collect();
+
+        let mut override_files: Option<Vec<PathBuf>> = None;
 
         progress.begin("Downloading assets...", assets.len());
 
@@ -139,6 +150,9 @@ impl Instance {
 
                 let pack = CurseForgeZip::load_zip(&dest_file_path)?;
                 pack.copy_game_data(&self.game_dir())?;
+                override_files = Some(pack.list_overrides(&[
+                    "mods", "resourcepacks", "shaderpacks"
+                ])?);
 
                 continue;
             }
@@ -164,13 +178,20 @@ impl Instance {
         let file_ids = mods.iter().map(|c| c.file_id).collect();
         let project_ids = mods.iter().map(|c| c.project_id).collect();
 
-        self.download_curseforge_files(&client, file_ids, project_ids, progress).await
+        self.download_curseforge_files(
+            &client,
+            file_ids,
+            project_ids,
+            override_files,
+            progress
+        ).await
     }
 
     async fn download_curseforge_files(&self,
         client: &AssetClient,
         file_ids: Vec<u64>,
         project_ids: Vec<u64>,
+        override_files: Option<Vec<PathBuf>>,
         progress: &mut dyn Progress
     ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
         let mut file_list = client.get_curseforge_file_list(&file_ids).await?;
@@ -216,10 +237,21 @@ impl Instance {
 
         progress.end();
 
+        let mut keep_files = file_downloads.iter()
+            .map(|f| PathBuf::from(&f.file_name))
+            .collect();
+
+        if let Some(override_files) = override_files {
+            keep_files = [
+                keep_files,
+                override_files
+            ].concat();
+        }
+
         let delete_files = [
-            list_extra_files(&self.mods_dir(), &file_downloads)?,
-            list_extra_files(&self.resource_pack_dir(), &file_downloads)?,
-            list_extra_files(&self.shader_pack_dir(), &file_downloads)?
+            list_files_for_delete(&self.mods_dir(), &keep_files)?,
+            list_files_for_delete(&self.resource_pack_dir(), &keep_files)?,
+            list_files_for_delete(&self.shader_pack_dir(), &keep_files)?
         ].concat();
 
         if !blocked.is_empty() {
@@ -563,15 +595,21 @@ impl FileDownload {
     }
 }
 
-fn list_extra_files(dir: &Path, downloads: &Vec<FileDownload>) -> Result<Vec<PathBuf>> {
-    let mut delete_files: Vec<PathBuf> = vec![];
+fn list_files_for_delete(dir: &Path, keep_files: &Vec<PathBuf>) -> Result<Vec<PathBuf>> {
+    let mut delete_files = Vec::new();
 
     if dir.exists() {
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
 
-            if !downloads.iter().any(|f| f.file_name == entry.file_name().to_string_lossy()) {
-                delete_files.push(entry.path());
+            if !entry.file_type()?.is_file() {
+                continue;
+            }
+
+            let path = entry.path();
+            let rel_path = path.strip_prefix(dir)?;
+            if !keep_files.iter().any(|f| f == rel_path) {
+                delete_files.push(path);
             }
         }
     }
