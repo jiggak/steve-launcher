@@ -28,6 +28,10 @@ pub struct Cli {
     #[arg(short, verbatim_doc_comment)]
     pub data_dir: Option<PathBuf>,
 
+    /// Instance directory with manifest and game files, defaults to "."
+    #[arg(short, global = true)]
+    pub instance_dir: Option<PathBuf>,
+
     #[command(subcommand)]
     pub command: Commands
 }
@@ -36,9 +40,6 @@ pub struct Cli {
 pub enum Commands {
     /// Create instance directory and manifest file
     Create {
-        /// Path to directory of new instance
-        dir: PathBuf,
-
         /// Version of minecraft or prompt to select from list when not specified
         mc_version: Option<String>,
 
@@ -53,9 +54,6 @@ pub enum Commands {
 
     /// Download instance assets and launch
     Launch {
-        /// Path to directory of instance
-        dir: PathBuf,
-
         /// Allow steve to exit while the java process is running
         #[arg(short)]
         detach: bool
@@ -69,18 +67,12 @@ pub enum Commands {
 
     /// Install CurseForge modpack zip into new or existing instance
     Import {
-        /// Path to instance directory
-        dir: PathBuf,
-
         /// Path to CurseForge modpack zip
         zip_file: PathBuf
     },
 
     /// Search and install FTB or CurseForge modpack into new or existing instance
     Modpack {
-        /// Path to instance directory
-        dir: PathBuf,
-
         /// Modpack search term
         search: String,
 

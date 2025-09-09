@@ -20,7 +20,7 @@ mod cli;
 mod cmds;
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
-use std::{io, path::{Path, PathBuf}};
+use std::{env as stdenv, io, path::{Path, PathBuf}};
 
 use cmds::{
     clear_credentials, create_instance, launch_instance, msal_login,
@@ -37,15 +37,17 @@ async fn main() -> anyhow::Result<()> {
         env::set_data_dir(dir.to_str().unwrap());
     }
 
-    match cli.command {
-        Commands::Create { dir, mc_version, snapshots, loader } => {
-            let instance_dir = absolute_path(&dir)?;
+    let instance_dir = if let Some(dir) = cli.instance_dir {
+        absolute_path(&dir)?
+    } else {
+        stdenv::current_dir()?
+    };
 
+    match cli.command {
+        Commands::Create { mc_version, snapshots, loader } => {
             create_instance(&instance_dir, mc_version, snapshots, loader).await
         },
-        Commands::Launch { dir, detach } => {
-            let instance_dir = absolute_path(&dir)?;
-
+        Commands::Launch { detach } => {
             launch_instance(&instance_dir, detach).await
         },
         Commands::Auth { command } => {
@@ -58,14 +60,10 @@ async fn main() -> anyhow::Result<()> {
                 msal_login().await
             }
         },
-        Commands::Import { dir, zip_file } => {
-            let instance_dir = absolute_path(&dir)?;
-
+        Commands::Import { zip_file } => {
             modpack_zip_install(&instance_dir, &zip_file).await
         },
-        Commands::Modpack { dir, search, search_limit } => {
-            let instance_dir = absolute_path(&dir)?;
-
+        Commands::Modpack { search, search_limit } => {
             modpack_search_and_install(&instance_dir, &search, search_limit).await
         },
         Commands::Completion => {
