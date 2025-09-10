@@ -17,7 +17,7 @@
  */
 
 pub use clap::Parser;
-use clap::Subcommand;
+use clap::{Args, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -81,6 +81,11 @@ pub enum Commands {
         search_limit: u8
     },
 
+    Server {
+        #[clap(subcommand)]
+        command: ServerCommands
+    },
+
     /// Output bash completion code
     ///
     /// eval "$(steve completion)"
@@ -94,4 +99,29 @@ pub enum AuthCommands {
 
     /// Delete stored account details
     Clear
+}
+
+#[derive(Subcommand)]
+pub enum ServerCommands {
+    New {
+        /// Version of minecraft or prompt to select from list when not specified
+        mc_version: Option<String>,
+
+        /// Mod laoder <forge|neoforge>[-<version>], prompt for version when not specified
+        #[arg(long)]
+        loader: Option<String>
+    },
+
+    Modpack(ServerModpackArgs),
+
+    Launch
+}
+
+#[derive(Args)]
+#[group(required = true, multiple = false)]
+pub struct ServerModpackArgs {
+    #[arg(long)]
+    pub ftb: Option<i32>,
+
+    pub search_term: Option<String>
 }

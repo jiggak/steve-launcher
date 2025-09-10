@@ -24,9 +24,10 @@ use std::{env as stdenv, io, path::{Path, PathBuf}};
 
 use cmds::{
     clear_credentials, create_instance, launch_instance, msal_login,
-    modpack_search_and_install, modpack_zip_install, print_account_status
+    modpack_search_and_install, modpack_zip_install, print_account_status,
+    server_launch, server_modpack_ftb, server_modpack_search, server_new
 };
-use cli::{AuthCommands, Parser, Cli, Commands};
+use cli::{AuthCommands, Parser, Cli, Commands, ServerCommands, ServerModpackArgs};
 use steve::{env, Progress};
 
 #[tokio::main(flavor = "current_thread")]
@@ -65,6 +66,27 @@ async fn main() -> anyhow::Result<()> {
         },
         Commands::Modpack { search, search_limit } => {
             modpack_search_and_install(&instance_dir, &search, search_limit).await
+        },
+        Commands::Server { command } => {
+            match command {
+                ServerCommands::New { mc_version, loader } => {
+                    server_new(&instance_dir, mc_version, loader)
+                },
+                ServerCommands::Modpack(arg) => {
+                    match arg {
+                        ServerModpackArgs { ftb: Some(pack_id), .. } => {
+                            server_modpack_ftb(&instance_dir, pack_id)
+                        },
+                        ServerModpackArgs { search_term: Some(search), .. } => {
+                            server_modpack_search(&instance_dir, search)
+                        },
+                        _ => panic!()
+                    }
+                },
+                ServerCommands::Launch => {
+                    server_launch(&instance_dir)
+                }
+            }
         },
         Commands::Completion => {
             Ok(print!("{}", include_str!("../steve-completion.bash")))
