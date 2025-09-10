@@ -27,6 +27,7 @@ mod instance;
 mod launch_cmd;
 mod json;
 mod rules;
+mod server_instance;
 mod zip;
 
 pub use {
@@ -40,7 +41,8 @@ pub use {
     json::ModLoader,
     json::ModLoaderName,
     json::ModpackManifest,
-    json::ModpackVersion
+    json::ModpackVersion,
+    server_instance::ServerInstance
 };
 
 #[derive(thiserror::Error, Debug)]

@@ -70,21 +70,21 @@ async fn main() -> anyhow::Result<()> {
         Commands::Server { command } => {
             match command {
                 ServerCommands::New { mc_version, loader } => {
-                    server_new(&instance_dir, mc_version, loader)
+                    server_new(&instance_dir, mc_version, loader).await
                 },
                 ServerCommands::Modpack(arg) => {
                     match arg {
                         ServerModpackArgs { ftb: Some(pack_id), .. } => {
-                            server_modpack_ftb(&instance_dir, pack_id)
+                            server_modpack_ftb(&instance_dir, pack_id).await
                         },
                         ServerModpackArgs { search_term: Some(search), .. } => {
-                            server_modpack_search(&instance_dir, search)
+                            server_modpack_search(&instance_dir, search).await
                         },
-                        _ => panic!()
+                        _ => unreachable!("ServerModpackArgs should require either --ftb or <search term>")
                     }
                 },
                 ServerCommands::Launch => {
-                    server_launch(&instance_dir)
+                    server_launch(&instance_dir).await
                 }
             }
         },

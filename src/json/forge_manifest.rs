@@ -67,6 +67,19 @@ pub enum ForgeDistribution {
     }
 }
 
+impl ForgeDistribution {
+    pub fn get_installer_lib(&self) -> Option<&ForgeLibrary> {
+        match self {
+            ForgeDistribution::Current { maven_files: Some(maven_files), .. } => {
+                let installer_lib = maven_files.iter()
+                    .find(|f| f.name().ends_with(":installer"));
+                return installer_lib;
+            },
+            _ => None
+        }
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum ForgeLibrary {
@@ -81,6 +94,13 @@ pub enum ForgeLibrary {
 }
 
 impl ForgeLibrary {
+    pub fn name(&self) -> &str {
+        match self {
+            ForgeLibrary::Downloads { name, .. } => &name,
+            ForgeLibrary::Url { name, .. } => &name
+        }
+    }
+
     pub fn asset_path(&self) -> String {
         match self {
             ForgeLibrary::Downloads { downloads, .. } => downloads.artifact.asset_path(),

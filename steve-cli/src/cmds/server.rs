@@ -17,25 +17,49 @@
  */
 
 use anyhow::Result;
+use steve::{ModLoader, ModLoaderName, ServerInstance};
 use std::path::Path;
 
+use crate::cmds::create::{prompt_loader_version, prompt_mc_version};
 
-pub fn server_new(
+pub async fn server_new(
     instance_dir: &Path,
     mc_version: Option<String>,
     mod_loader: Option<String>
 ) -> Result<()> {
-    Ok(println!("Server new {:?} {:?} {:?}", instance_dir, mc_version, mod_loader))
+    let mc_version = match mc_version {
+        Some(v) => v,
+        None => prompt_mc_version(false).await?
+    };
+
+    let mod_loader = if let Some(mod_loader_id) = mod_loader {
+        if let Ok(mod_loader) = mod_loader_id.parse() {
+            Some(mod_loader)
+        } else {
+            let name = mod_loader_id.parse::<ModLoaderName>()?;
+            let version = prompt_loader_version(&mc_version, &name).await?;
+            Some(ModLoader { name, version })
+        }
+    } else {
+        None
+    };
+
+    ServerInstance::create(instance_dir, &mc_version, mod_loader).await?;
+
+    Ok(())
 }
 
-pub fn server_modpack_ftb(instance_dir: &Path, pack_id: i32) -> Result<()> {
+pub async fn server_modpack_ftb(instance_dir: &Path, pack_id: i32) -> Result<()> {
     Ok(println!("Server ftb pack {:?} {pack_id}", instance_dir))
 }
 
-pub fn server_modpack_search(instance_dir: &Path, search: String) -> Result<()> {
+pub async fn server_modpack_search(instance_dir: &Path, search: String) -> Result<()> {
     Ok(println!("Server modpack search {:?} {search}", instance_dir))
 }
 
-pub fn server_launch(instance_dir: &Path) -> Result<()> {
-    Ok(println!("Server launch {:?}", instance_dir))
+pub async fn server_launch(instance_dir: &Path) -> Result<()> {
+    let instance = ServerInstance::load(instance_dir)?;
+    let mut result = instance.launch().await?;
+    result.wait()?;
+    Ok(())
 }

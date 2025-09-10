@@ -45,7 +45,7 @@ pub struct InstanceManifest {
     pub custom_jar: Option<String>
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub enum ModLoaderName {
     #[serde(rename = "forge")]
     Forge,

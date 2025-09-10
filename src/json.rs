@@ -24,6 +24,7 @@ mod forge_version_manifest;
 mod game_manifest;
 mod instance_manifest;
 mod modpacks_ch;
+mod server_instance_manifest;
 mod version_manifest;
 
 pub use account_manifest::*;
@@ -34,6 +35,7 @@ pub use forge_version_manifest::*;
 pub use game_manifest::*;
 pub use instance_manifest::*;
 pub use modpacks_ch::*;
+pub use server_instance_manifest::*;
 pub use version_manifest::*;
 
 use serde::{Deserialize, Deserializer};

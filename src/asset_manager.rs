@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use semver::{Version, VersionReq};
 use std::{collections::HashMap, fs, path::Path, path::PathBuf};
 
@@ -104,6 +104,25 @@ impl AssetManager {
         populate_fml_libs(&mut forge_manifest)?;
 
         Ok(forge_manifest)
+    }
+
+    pub async fn get_loader_installer(&self, mod_loader: &ModLoader) -> Result<PathBuf> {
+        let manifest = self.get_loader_manifest(mod_loader).await?;
+
+        let installer = manifest.dist.get_installer_lib();
+        if let Some(installer) = installer {
+            let installer_path = installer.asset_path();
+            self.download_library(&installer_path, &installer.download_url()).await?;
+
+            return Ok(self.libs_dir.join(installer_path));
+        }
+
+        // I'm taking the lazy approach and crashing when installer jar not in manifest.
+        // Looking at my steve data cache, 1.16.x has the installer jar, 1.12.x does not.
+        bail!(
+            "Unhandled installer download for {:?} {}",
+            mod_loader.name, mod_loader.version
+        )
     }
 
     pub async fn get_asset_manfiest(&self, game_manifest: &GameManifest) -> Result<AssetManifest> {

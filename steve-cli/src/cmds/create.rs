@@ -51,7 +51,7 @@ pub async fn create_instance(
     Ok(())
 }
 
-async fn prompt_loader_version(mc_version: &str, loader: &ModLoaderName) -> Result<String> {
+pub async fn prompt_loader_version(mc_version: &str, loader: &ModLoaderName) -> Result<String> {
     let client = AssetClient::new();
 
     // fetch loader versions for the version of minecraft
@@ -72,7 +72,7 @@ async fn prompt_loader_version(mc_version: &str, loader: &ModLoaderName) -> Resu
     Ok(versions[selection].sversion.to_owned())
 }
 
-async fn prompt_mc_version(snapshots: bool) -> Result<String> {
+pub async fn prompt_mc_version(snapshots: bool) -> Result<String> {
     let client = AssetClient::new();
 
     let manifest = client.get_mc_version_manifest().await?;
