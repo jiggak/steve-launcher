@@ -55,6 +55,8 @@ pub enum Error {
     MinecraftTargetNotFound,
     #[error("Minecraft version '{0}' not found")]
     MinecraftVersionNotFound(String),
+    #[error("Minecraft version '{0}' does not include server download")]
+    MinecraftServerNotFound(String),
     #[error("Forge version '{0}' not found")]
     ForgeVersionNotFound(String),
     #[error("Unable to parse '{version}' with lenient_semver")]

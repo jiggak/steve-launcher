@@ -92,6 +92,7 @@ impl ServerInstance {
         fs::create_dir_all(&server_dir)?;
 
         let assets = AssetManager::new()?;
+
         if let Some(loader) = instance.manifest.mod_loader.as_ref() {
             let installer_jar = assets.get_loader_installer(&loader).await?;
 
@@ -104,6 +105,9 @@ impl ServerInstance {
             };
 
             cmd.spawn()?.wait()?;
+        } else {
+            assets.download_server_jar(mc_version, &server_dir.join("server.jar"))
+                .await?;
         }
 
         Ok(instance)

@@ -83,6 +83,18 @@ impl AssetManager {
         Ok(game_manifest)
     }
 
+    pub async fn download_server_jar(&self, mc_version: &str, path: &Path) -> Result<()> {
+        let manifest = self.get_game_manifest(mc_version).await?;
+
+        if let Some(server) = manifest.downloads.server {
+            self.client.download_file(&server.url, path).await?;
+
+            Ok(())
+        } else {
+            bail!(Error::MinecraftServerNotFound(mc_version.to_string()))
+        }
+    }
+
     pub async fn get_loader_manifest(&self, mod_loader: &ModLoader) -> Result<ForgeManifest> {
         let file_name = format!("{name}_{ver}.json",
             name = mod_loader.name.to_string(),
