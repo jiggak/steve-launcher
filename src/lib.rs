@@ -24,6 +24,7 @@ mod download_watcher;
 pub mod env;
 mod fs;
 mod instance;
+mod launch_cmd;
 mod json;
 mod rules;
 mod zip;

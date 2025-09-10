@@ -18,7 +18,7 @@
 
 use anyhow::{bail, Result};
 use std::{
-    collections::HashMap, fs, path::{Path, PathBuf}, process::{Child, Command}
+    fs, path::{Path, PathBuf}, process::Child
 };
 
 use crate::{
@@ -29,6 +29,7 @@ use crate::{
         CurseForgeFile, CurseForgeMod, ForgeDistribution, InstanceManifest,
         ModLoader, ModpackVersionManifest
     },
+    launch_cmd::LaunchCommand,
     Progress
 };
 
@@ -365,7 +366,13 @@ impl Instance {
 
         assets.extract_natives(&game_manifest, &self.natives_dir(), progress)?;
 
-        let mut cmd = LaunchCommand::new(self);
+        let mut cmd = LaunchCommand::new(
+            &self.game_dir(),
+            self.manifest.java_path.as_ref(),
+            self.manifest.java_args.as_ref(),
+            self.manifest.java_env.as_ref()
+        );
+
         fs::create_dir_all(self.game_dir())?;
 
         let mut main_jar: String = get_client_jar_path(&game_manifest.id);
@@ -486,70 +493,6 @@ impl Instance {
         }
 
         Ok(cmd.spawn()?)
-    }
-}
-
-struct LaunchCommand {
-    cmd: Command,
-    ctx: HashMap<&'static str, String>,
-    args: Vec<String>
-}
-
-impl LaunchCommand {
-    fn new(instance: &Instance) -> Self {
-        // use java override path from instance manifest, or default to "java" in PATH
-        let mut cmd = if let Some(path) = &instance.manifest.java_path {
-            Command::new(path)
-        } else {
-            Command::new("java")
-        };
-
-        if let Some(args) = &instance.manifest.java_args {
-            cmd.args(args);
-        }
-
-        if let Some(vars) = &instance.manifest.java_env {
-            cmd.envs(vars);
-        }
-
-        // set current directory for log output
-        cmd.current_dir(instance.game_dir());
-
-        Self {
-            cmd: cmd,
-            ctx: HashMap::new(),
-            args: Vec::new()
-        }
-    }
-
-    fn arg_ctx<S: Into<String>>(&mut self, key: &'static str, val: S) -> &mut Self {
-        self.ctx.insert(key, val.into());
-        self
-    }
-
-    fn arg<S: Into<String>>(&mut self, val: S) -> &mut Self {
-        self.args.push(val.into());
-        self
-    }
-
-    fn args<I>(&mut self, iter: I) -> &mut Self
-        where I: IntoIterator, I::Item: Into<String>
-    {
-        iter.into_iter().for_each(|v| self.args.push(v.into()));
-        self
-    }
-
-    fn spawn(&mut self) -> std::io::Result<Child> {
-        for arg in &self.args {
-            self.cmd.arg(
-                shellexpand::env_with_context_no_errors(
-                    &arg,
-                    |var:&str| self.ctx.get(var)
-                ).to_string()
-            );
-        }
-
-        self.cmd.spawn()
     }
 }
 
