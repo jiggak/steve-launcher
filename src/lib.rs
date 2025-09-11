@@ -23,6 +23,7 @@ mod curseforge_zip;
 mod download_watcher;
 pub mod env;
 mod fs;
+mod installer;
 mod instance;
 mod launch_cmd;
 mod json;
@@ -36,8 +37,9 @@ pub use {
     curseforge_zip::CurseForgeZip,
     download_watcher::DownloadWatcher,
     download_watcher::WatcherMessage,
+    installer::Installer,
+    installer::FileDownload,
     instance::Instance,
-    instance::FileDownload,
     json::ModLoader,
     json::ModLoaderName,
     json::ModpackManifest,

@@ -27,8 +27,7 @@ use std::{
 
 use crate::ProgressHandler;
 use steve::{
-    AssetClient, CurseForgeZip, DownloadWatcher, FileDownload, Instance,
-    ModpackManifest, ModpackVersion, Progress, WatcherMessage
+    AssetClient, CurseForgeZip, DownloadWatcher, FileDownload, Installer, Instance, ModpackManifest, ModpackVersion, Progress, WatcherMessage
 };
 use super::{console_theme, prompt_confirm};
 
@@ -107,11 +106,12 @@ pub async fn modpack_search_and_install(
         ).await?
     };
 
-    let (remove, downloads) = instance.install_pack(&pack, &mut progress)
+    let installer = Installer::new(&instance.game_dir());
+    let (remove, downloads) = installer.install_pack(&pack, &mut progress)
         .await?;
 
     if let Some(downloads) = downloads {
-        download_blocked(instance, downloads)?;
+        download_blocked(&installer, downloads)?;
     }
 
     if !remove.is_empty() {
@@ -148,11 +148,12 @@ pub async fn modpack_zip_install(
         ).await?
     };
 
-    let (remove, downloads) = instance.install_pack_zip(&pack, &mut progress)
+    let installer = Installer::new(&instance.game_dir());
+    let (remove, downloads) = installer.install_pack_zip(&pack, &mut progress)
         .await?;
 
     if let Some(downloads) = downloads {
-        download_blocked(instance, downloads)?;
+        download_blocked(&installer, downloads)?;
     }
 
     if !remove.is_empty() {
@@ -162,7 +163,7 @@ pub async fn modpack_zip_install(
     Ok(())
 }
 
-fn download_blocked(instance: Instance, downloads: Vec<FileDownload>) -> Result<()> {
+fn download_blocked(installer: &Installer, downloads: Vec<FileDownload>) -> Result<()> {
     let watcher = DownloadWatcher::new(
         downloads.iter()
             .map(|f| f.file_name.as_str())
@@ -172,7 +173,7 @@ fn download_blocked(instance: Instance, downloads: Vec<FileDownload>) -> Result<
     for f in &downloads {
         if watcher.is_file_complete(&f.file_name) {
             let file_path = watcher.watch_dir.join(&f.file_name);
-            instance.install_file(f, &file_path)?;
+            installer.install_file(f, &file_path)?;
         }
     }
 
@@ -200,7 +201,7 @@ fn download_blocked(instance: Instance, downloads: Vec<FileDownload>) -> Result<
                     let file = downloads.iter()
                         .find(|d| d.file_name == file_name)
                         .unwrap();
-                    instance.install_file(file, &file_path)?;
+                    installer.install_file(file, &file_path)?;
                     print_download_state(&term, &watcher, &downloads)?;
                 },
                 WatcherMessage::AllComplete => {
