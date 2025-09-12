@@ -75,9 +75,7 @@ impl Installer {
     ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
         // copy pack overrides to minecraft dir
         pack.copy_game_data(&self.dest_dir)?;
-        let override_files = pack.list_overrides(&[
-            "mods", "resourcepacks", "shaderpacks"
-        ])?;
+        let installed_files = pack.list_overrides()?;
 
         let file_ids = pack.manifest.get_file_ids();
         let project_ids = pack.manifest.get_project_ids();
@@ -85,7 +83,7 @@ impl Installer {
         self.download_curseforge_files(
             file_ids,
             project_ids,
-            Some(override_files),
+            installed_files,
             progress
         ).await
     }
@@ -98,7 +96,7 @@ impl Installer {
             .filter(|f| f.url.is_some())
             .collect();
 
-        let mut override_files: Option<Vec<PathBuf>> = None;
+        let mut installed_files: Vec<PathBuf> = Vec::new();
 
         progress.begin("Downloading assets...", assets.len());
 
@@ -114,9 +112,9 @@ impl Installer {
 
                 let pack = CurseForgeZip::load_zip(&dest_file_path)?;
                 pack.copy_game_data(&self.dest_dir)?;
-                override_files = Some(pack.list_overrides(&[
-                    "mods", "resourcepacks", "shaderpacks"
-                ])?);
+
+                let mut override_files = pack.list_overrides()?;
+                installed_files.append(&mut override_files);
 
                 continue;
             }
@@ -124,12 +122,12 @@ impl Installer {
             let dest_file_path = self.dest_dir.join(&f.path).join(&f.name);
 
             // save time/bandwidth and skip download if dest file exists
-            if dest_file_path.exists() {
-                continue;
+            if !dest_file_path.exists() {
+                self.client.download_file(f.url.as_ref().unwrap(), &dest_file_path)
+                    .await?;
             }
 
-            self.client.download_file(f.url.as_ref().unwrap(), &dest_file_path)
-                .await?;
+            installed_files.push(dest_file_path);
         }
 
         progress.end();
@@ -144,7 +142,7 @@ impl Installer {
         self.download_curseforge_files(
             file_ids,
             project_ids,
-            override_files,
+            installed_files,
             progress
         ).await
     }
@@ -152,7 +150,7 @@ impl Installer {
     async fn download_curseforge_files(&self,
         file_ids: Vec<u64>,
         project_ids: Vec<u64>,
-        override_files: Option<Vec<PathBuf>>,
+        mut installed_files: Vec<PathBuf>,
         progress: &mut dyn Progress
     ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
         let mut file_list = self.client.get_curseforge_file_list(&file_ids).await?;
@@ -198,21 +196,15 @@ impl Installer {
 
         progress.end();
 
-        let mut keep_files = file_downloads.iter()
-            .map(|f| PathBuf::from(&f.file_name))
-            .collect();
-
-        if let Some(override_files) = override_files {
-            keep_files = [
-                keep_files,
-                override_files
-            ].concat();
-        }
+        installed_files.extend(
+            file_downloads.iter()
+                .map(|f| self.get_file_path(f))
+        );
 
         let delete_files = [
-            list_files_for_delete(&self.mods_dir(), &keep_files)?,
-            list_files_for_delete(&self.resource_pack_dir(), &keep_files)?,
-            list_files_for_delete(&self.shader_pack_dir(), &keep_files)?
+            list_files_for_delete(&self.mods_dir(), &installed_files)?,
+            list_files_for_delete(&self.resource_pack_dir(), &installed_files)?,
+            list_files_for_delete(&self.shader_pack_dir(), &installed_files)?
         ].concat();
 
         if !blocked.is_empty() {
@@ -277,8 +269,7 @@ fn list_files_for_delete(dir: &Path, keep_files: &Vec<PathBuf>) -> Result<Vec<Pa
             }
 
             let path = entry.path();
-            let rel_path = path.strip_prefix(dir)?;
-            if !keep_files.iter().any(|f| f == rel_path) {
+            if !keep_files.contains(&path) {
                 delete_files.push(path);
             }
         }
