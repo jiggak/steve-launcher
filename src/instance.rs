@@ -34,7 +34,7 @@ pub struct Instance {
     pub manifest: InstanceManifest,
 
     /// Absolute path of the instance directory
-    pub dir: PathBuf,
+    pub dir: PathBuf
 }
 
 impl Instance {
@@ -47,7 +47,7 @@ impl Instance {
     fn new(instance_dir: &Path, manifest: InstanceManifest) -> Result<Instance> {
         Ok(Instance {
             dir: fs::canonicalize(instance_dir)?,
-            manifest,
+            manifest
         })
     }
 
@@ -62,7 +62,7 @@ impl Instance {
     pub async fn create(
         instance_dir: &Path,
         mc_version: &str,
-        mod_loader: Option<ModLoader>,
+        mod_loader: Option<ModLoader>
     ) -> Result<Instance> {
         let assets = AssetManager::new()?;
 
@@ -88,8 +88,8 @@ impl Instance {
                 java_args: None,
                 java_env: None,
                 mod_loader,
-                custom_jar: None,
-            },
+                custom_jar: None
+            }
         )?;
 
         // write instance manifest.json file
@@ -101,9 +101,7 @@ impl Instance {
     pub fn load(instance_dir: &Path) -> Result<Instance> {
         let manifest_path = instance_dir.join(MANIFEST_FILE);
         if !manifest_path.exists() {
-            bail!(Error::InstanceNotFound(
-                instance_dir.to_str().unwrap().to_string()
-            ))
+            bail!(Error::InstanceNotFound(instance_dir.to_string_lossy().to_string()))
         }
 
         let json = fs::read_to_string(manifest_path)?;
@@ -162,16 +160,14 @@ impl Instance {
 
         let loader_manifest = match &self.manifest.mod_loader {
             Some(mod_loader) => Some(assets.get_loader_manifest(mod_loader).await?),
-            None => None,
+            None => None
         };
 
         assets.download_assets(&asset_manifest, progress).await?;
         assets.download_libraries(&game_manifest, progress).await?;
 
         if let Some(loader_manifest) = &loader_manifest {
-            assets
-                .download_loader_libraries(loader_manifest, progress)
-                .await?;
+            assets.download_loader_libraries(loader_manifest, progress).await?;
         }
 
         let resources_dir = if asset_manifest.is_virtual.unwrap_or(false) {
@@ -192,7 +188,7 @@ impl Instance {
             &self.game_dir(),
             self.manifest.java_path.as_ref(),
             self.manifest.java_args.as_ref(),
-            self.manifest.java_env.as_ref(),
+            self.manifest.java_env.as_ref()
         );
 
         fs::create_dir_all(self.game_dir())?;
@@ -203,19 +199,17 @@ impl Instance {
             match &loader_manifest.dist {
                 // legacy forge distributions required modifying the `minecraft.jar` file
                 ForgeDistribution::Legacy { jar_mods, fml_libs } => {
-                    main_jar =
-                        make_forge_modded_jar(&main_jar, &loader_manifest.version, &jar_mods)?
-                            .to_string_lossy()
-                            .to_string();
+                    main_jar = make_forge_modded_jar(&main_jar, &loader_manifest.version, &jar_mods)?
+                        .to_string_lossy()
+                        .to_string();
 
                     // forge will throw an error on startup attempting to download
                     // these libraries (404 not found), unless they already exist
                     if let Some(fml_libs) = fml_libs {
                         super::fs::copy_files(
-                            fml_libs
-                                .iter()
+                            fml_libs.iter()
                                 .map(|l| env::get_libs_dir().join(l.asset_path())),
-                            self.fml_libs_dir(),
+                            self.fml_libs_dir()
                         )?;
                     }
 
@@ -229,12 +223,8 @@ impl Instance {
                     if let Some(args) = game_manifest.minecraft_arguments {
                         cmd.args(args.split(' '));
                     }
-                }
-                ForgeDistribution::Current {
-                    main_class,
-                    minecraft_arguments,
-                    ..
-                } => {
+                },
+                ForgeDistribution::Current { main_class, minecraft_arguments, .. } => {
                     cmd.arg("-Djava.library.path=${natives_directory}");
                     cmd.arg("-cp").arg("${classpath}");
                     cmd.arg(main_class);
@@ -276,12 +266,10 @@ impl Instance {
         let mut libs = vec![main_jar];
 
         libs.extend(
-            game_manifest
-                .libraries
-                .iter()
+            game_manifest.libraries.iter()
                 .filter(|lib| lib.has_rules_match())
                 .filter_map(|lib| lib.downloads.artifact.as_ref())
-                .map(|a| a.path.clone()),
+                .map(|a| a.path.clone())
         );
 
         if let Some(loader_manifest) = &loader_manifest {
@@ -291,9 +279,8 @@ impl Instance {
         }
 
         let classpath = std::env::join_paths(
-            asset_manager::dedup_libs(&libs)?
-                .iter()
-                .map(|p| env::get_libs_dir().join(p)),
+            asset_manager::dedup_libs(&libs)?.iter()
+                .map(|p| env::get_libs_dir().join(p))
         )?;
 
         let auth_session = format!(
