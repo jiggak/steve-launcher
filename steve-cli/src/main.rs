@@ -78,7 +78,7 @@ async fn main() -> anyhow::Result<()> {
                             server_modpack_ftb(&instance_dir, pack_id).await
                         },
                         ServerModpackArgs { search_term: Some(search), .. } => {
-                            server_modpack_search(&instance_dir, search).await
+                            server_modpack_search(&instance_dir, &search).await
                         },
                         _ => unreachable!("ServerModpackArgs should require either --ftb or <search term>")
                     }

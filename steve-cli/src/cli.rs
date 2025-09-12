@@ -121,7 +121,7 @@ pub enum ServerCommands {
 #[group(required = true, multiple = false)]
 pub struct ServerModpackArgs {
     #[arg(long)]
-    pub ftb: Option<i32>,
+    pub ftb: Option<u32>,
 
     pub search_term: Option<String>
 }

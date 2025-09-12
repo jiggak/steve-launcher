@@ -20,7 +20,10 @@ use anyhow::Result;
 use steve::{ModLoader, ModLoaderName, ServerInstance};
 use std::path::Path;
 
-use crate::cmds::create::{prompt_loader_version, prompt_mc_version};
+use crate::cmds::{
+    create::{prompt_loader_version, prompt_mc_version},
+    modpack::{get_ftb_pack, install_pack, search_modpacks}
+};
 
 pub async fn server_new(
     instance_dir: &Path,
@@ -49,12 +52,32 @@ pub async fn server_new(
     Ok(())
 }
 
-pub async fn server_modpack_ftb(instance_dir: &Path, pack_id: i32) -> Result<()> {
-    Ok(println!("Server ftb pack {:?} {pack_id}", instance_dir))
+pub async fn server_modpack_ftb(instance_dir: &Path, pack_id: u32) -> Result<()> {
+    let pack = get_ftb_pack(pack_id).await?;
+
+    let instance = ServerInstance::create(
+        instance_dir,
+        &pack.get_minecraft_version()?,
+        pack.get_mod_loader()?
+    ).await?;
+
+    install_pack(&instance.server_dir(), true, &pack).await?;
+
+    Ok(())
 }
 
-pub async fn server_modpack_search(instance_dir: &Path, search: String) -> Result<()> {
-    Ok(println!("Server modpack search {:?} {search}", instance_dir))
+pub async fn server_modpack_search(instance_dir: &Path, search: &str) -> Result<()> {
+    let pack = search_modpacks(search, 5).await?;
+
+    let instance = ServerInstance::create(
+        instance_dir,
+        &pack.get_minecraft_version()?,
+        pack.get_mod_loader()?
+    ).await?;
+
+    install_pack(&instance.server_dir(), true, &pack).await?;
+
+    Ok(())
 }
 
 pub async fn server_launch(instance_dir: &Path) -> Result<()> {

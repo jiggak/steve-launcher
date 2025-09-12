@@ -44,6 +44,7 @@ pub use {
     json::ModLoaderName,
     json::ModpackManifest,
     json::ModpackVersion,
+    json::ModpackVersionManifest,
     server_instance::ServerInstance
 };
 

@@ -90,9 +90,19 @@ impl Installer {
 
     pub async fn install_pack(&self,
         pack: &ModpackVersionManifest,
+        is_server: bool,
         progress: &mut dyn Progress
     ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
-        let assets: Vec<_> = pack.files.iter()
+        let pack_files: Vec<_> = if is_server {
+            pack.files.iter()
+                .filter(|f| !f.clientonly)
+                .collect()
+        } else {
+            pack.files.iter()
+                .collect()
+        };
+
+        let assets: Vec<_> = pack_files.iter()
             .filter(|f| f.url.is_some())
             .collect();
 
@@ -132,7 +142,7 @@ impl Installer {
 
         progress.end();
 
-        let mods: Vec<_> = pack.files.iter()
+        let mods: Vec<_> = pack_files.iter()
             .filter_map(|f| f.curseforge.as_ref())
             .collect();
 

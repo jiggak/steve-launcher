@@ -27,7 +27,7 @@ use std::{
 
 use crate::ProgressHandler;
 use steve::{
-    AssetClient, CurseForgeZip, DownloadWatcher, FileDownload, Installer, Instance, ModpackManifest, ModpackVersion, Progress, WatcherMessage
+    AssetClient, CurseForgeZip, DownloadWatcher, FileDownload, Installer, Instance, ModpackManifest, ModpackVersion, ModpackVersionManifest, Progress, WatcherMessage
 };
 use super::{console_theme, prompt_confirm};
 
@@ -36,6 +36,33 @@ pub async fn modpack_search_and_install(
     search: &str,
     limit: u8
 ) -> Result<()> {
+    let pack = search_modpacks(search, limit).await?;
+
+    let instance = if Instance::exists(instance_dir) {
+        if !prompt_confirm("Instance already exists, are you sure you want to install the pack here?")? {
+            return Ok(())
+        }
+
+        let mut instance = Instance::load(instance_dir)?;
+
+        instance.set_mc_version(pack.get_minecraft_version()?)?;
+        instance.set_mod_loader(pack.get_mod_loader()?)?;
+
+        instance
+    } else {
+        Instance::create(
+            instance_dir,
+            &pack.get_minecraft_version()?,
+            pack.get_mod_loader()?
+        ).await?
+    };
+
+    install_pack(&instance.game_dir(), false, &pack).await?;
+
+    Ok(())
+}
+
+pub async fn search_modpacks(search: &str, limit: u8) -> Result<ModpackVersionManifest> {
     let mut progress = ProgressHandler::new();
     let client = AssetClient::new();
 
@@ -87,27 +114,34 @@ pub async fn modpack_search_and_install(
         client.get_ftb_modpack(selected_pack.pack_id, selected_version.version_id).await?
     };
 
-    let instance = if Instance::exists(instance_dir) {
-        if !prompt_confirm("Instance already exists, are you sure you want to install the pack here?")? {
-            return Ok(())
-        }
+    Ok(pack)
+}
 
-        let mut instance = Instance::load(instance_dir)?;
+pub async fn get_ftb_pack(pack_id: u32) -> Result<ModpackVersionManifest> {
+    let client = AssetClient::new();
 
-        instance.set_mc_version(pack.get_minecraft_version()?)?;
-        instance.set_mod_loader(pack.get_mod_loader()?)?;
+    let manifest = client.get_ftb_modpack_versions(pack_id).await?;
 
-        instance
-    } else {
-        Instance::create(
-            instance_dir,
-            &pack.get_minecraft_version()?,
-            pack.get_mod_loader()?
-        ).await?
-    };
+    let selection = Select::with_theme(&console_theme())
+        .with_prompt("Select modpack version")
+        .items(&format_modpack_versions(manifest.versions.iter()))
+        .default(0)
+        .interact()?;
 
-    let installer = Installer::new(&instance.game_dir());
-    let (remove, downloads) = installer.install_pack(&pack, &mut progress)
+    let version = &manifest.versions[selection];
+
+    Ok(client.get_ftb_modpack(pack_id, version.version_id).await?)
+}
+
+pub async fn install_pack(
+    dest_dir: &Path,
+    is_server: bool,
+    pack: &ModpackVersionManifest
+) -> Result<()> {
+    let mut progress = ProgressHandler::new();
+    let installer = Installer::new(dest_dir);
+
+    let (remove, downloads) = installer.install_pack(pack, is_server, &mut progress)
         .await?;
 
     if let Some(downloads) = downloads {
@@ -115,7 +149,7 @@ pub async fn modpack_search_and_install(
     }
 
     if !remove.is_empty() {
-        remove_files_prompt(instance_dir, &remove)?;
+        remove_files_prompt(dest_dir, &remove)?;
     }
 
     Ok(())
