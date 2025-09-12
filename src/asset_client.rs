@@ -35,6 +35,7 @@ const NEOFORGE_INDEX_URL: &str = "https://meta.prismlauncher.org/v1/net.neoforge
 const CURSE_MOD_FILES_URL: &str = "https://api.curseforge.com/v1/mods/files";
 const CURSE_MODS_URL: &str = "https://api.curseforge.com/v1/mods";
 const MODPACKS_CH_URL: &str = "https://api.modpacks.ch/public";
+const FTB_PACK_API_URL: &str = "https://api.feed-the-beast.com/v1/modpacks/modpack";
 
 pub struct AssetClient {
     client: Client
@@ -165,7 +166,8 @@ impl AssetClient {
     }
 
     pub async fn get_ftb_modpack_versions(&self, pack_id: u32) -> Result<ModpackManifest> {
-        let url = format!("{MODPACKS_CH_URL}/modpack/{pack_id}");
+        // let url = format!("{MODPACKS_CH_URL}/modpack/{pack_id}");
+        let url = format!("{FTB_PACK_API_URL}/{pack_id}");
         let response = self.client.get(url)
             .send().await?
             .error_for_status()?
@@ -175,7 +177,12 @@ impl AssetClient {
     }
 
     pub async fn get_ftb_modpack(&self, pack_id: u32, version_id: u32) -> Result<ModpackVersionManifest> {
-        let url = format!("{MODPACKS_CH_URL}/modpack/{pack_id}/{version_id}");
+        // There are some slight inconsistencies between FTB API and modpacks.ch
+        // FTB Skies 2 pack has several differences in the "clientonly" flag
+        // When using the FTB API, the files downloaded to build a server pack
+        // (excluding clientonly=true) yields a working server, modpacks.ch does not
+        // let url = format!("{MODPACKS_CH_URL}/modpack/{pack_id}/{version_id}");
+        let url = format!("{FTB_PACK_API_URL}/{pack_id}/{version_id}");
         let response = self.client.get(url)
             .send().await?
             .error_for_status()?
