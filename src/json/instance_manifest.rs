@@ -95,3 +95,9 @@ impl FromStr for ModLoader {
         })
     }
 }
+
+impl ToString for ModLoader {
+    fn to_string(&self) -> String {
+        format!("{}-{}", self.name.to_string(), self.version)
+    }
+}

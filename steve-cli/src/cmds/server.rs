@@ -20,9 +20,10 @@ use anyhow::Result;
 use steve::{ModLoader, ModLoaderName, ServerInstance};
 use std::path::Path;
 
-use crate::cmds::{
-    create::{prompt_loader_version, prompt_mc_version},
-    modpack::{get_ftb_pack, install_pack, search_modpacks}
+use crate::{
+    cmds::create::{prompt_loader_version, prompt_mc_version},
+    cmds::modpack::{get_ftb_pack, install_pack, search_modpacks},
+    ProgressHandler
 };
 
 pub async fn server_new(
@@ -47,7 +48,13 @@ pub async fn server_new(
         None
     };
 
-    ServerInstance::create(instance_dir, &mc_version, mod_loader).await?;
+    let progress = ProgressHandler::new();
+    ServerInstance::create(
+        instance_dir,
+        &mc_version,
+        mod_loader,
+        &progress
+    ).await?;
 
     Ok(())
 }
@@ -55,10 +62,12 @@ pub async fn server_new(
 pub async fn server_modpack_ftb(instance_dir: &Path, pack_id: u32) -> Result<()> {
     let pack = get_ftb_pack(pack_id).await?;
 
+    let progress = ProgressHandler::new();
     let instance = ServerInstance::create(
         instance_dir,
         &pack.get_minecraft_version()?,
-        pack.get_mod_loader()?
+        pack.get_mod_loader()?,
+        &progress
     ).await?;
 
     install_pack(&instance.server_dir(), true, &pack).await?;
@@ -69,10 +78,12 @@ pub async fn server_modpack_ftb(instance_dir: &Path, pack_id: u32) -> Result<()>
 pub async fn server_modpack_search(instance_dir: &Path, search: &str) -> Result<()> {
     let pack = search_modpacks(search, 5).await?;
 
+    let progress = ProgressHandler::new();
     let instance = ServerInstance::create(
         instance_dir,
         &pack.get_minecraft_version()?,
-        pack.get_mod_loader()?
+        pack.get_mod_loader()?,
+        &progress
     ).await?;
 
     install_pack(&instance.server_dir(), true, &pack).await?;

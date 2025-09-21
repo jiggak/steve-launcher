@@ -83,7 +83,9 @@ pub enum Error {
     #[error("Invalid mod loader name '{0}'")]
     InvalidModLoaderName(String),
     #[error("Invalid mod loader ID format '{0}'; expected [name]-[version]")]
-    InvalidModLoaderId(String)
+    InvalidModLoaderId(String),
+    #[error("Unhandled modloader installer download for {0}")]
+    UnhandledModLoaderInstaller(String)
 }
 
 pub trait Progress {

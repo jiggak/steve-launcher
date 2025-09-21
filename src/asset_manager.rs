@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use semver::{Version, VersionReq};
 use std::{collections::HashMap, fs, path::Path, path::PathBuf};
 
@@ -83,18 +83,6 @@ impl AssetManager {
         Ok(game_manifest)
     }
 
-    pub async fn download_server_jar(&self, mc_version: &str, path: &Path) -> Result<()> {
-        let manifest = self.get_game_manifest(mc_version).await?;
-
-        if let Some(server) = manifest.downloads.server {
-            self.client.download_file(&server.url, path).await?;
-
-            Ok(())
-        } else {
-            bail!(Error::MinecraftServerNotFound(mc_version.to_string()))
-        }
-    }
-
     pub async fn get_loader_manifest(&self, mod_loader: &ModLoader) -> Result<ForgeManifest> {
         let file_name = format!("{name}_{ver}.json",
             name = mod_loader.name.to_string(),
@@ -116,25 +104,6 @@ impl AssetManager {
         populate_fml_libs(&mut forge_manifest)?;
 
         Ok(forge_manifest)
-    }
-
-    pub async fn get_loader_installer(&self, mod_loader: &ModLoader) -> Result<PathBuf> {
-        let manifest = self.get_loader_manifest(mod_loader).await?;
-
-        let installer = manifest.dist.get_installer_lib();
-        if let Some(installer) = installer {
-            let installer_path = installer.asset_path();
-            self.download_library(&installer_path, &installer.download_url()).await?;
-
-            return Ok(self.libs_dir.join(installer_path));
-        }
-
-        // I'm taking the lazy approach and crashing when installer jar not in manifest.
-        // Looking at my steve data cache, 1.16.x has the installer jar, 1.12.x does not.
-        bail!(
-            "Unhandled installer download for {:?} {}",
-            mod_loader.name, mod_loader.version
-        )
     }
 
     pub async fn get_asset_manfiest(&self, game_manifest: &GameManifest) -> Result<AssetManifest> {
@@ -186,7 +155,7 @@ impl AssetManager {
 
         let url = format!("https://resources.download.minecraft.net/{hash_prefix}/{hash}");
 
-        self.client.download_file(&url, &object_file).await
+        self.client.download_file(&url, &object_file, |_| {}).await
     }
 
     pub async fn download_libraries(&self,
@@ -210,7 +179,7 @@ impl AssetManager {
 
         for (i, (path, url)) in lib_downloads.iter().enumerate() {
             progress.advance(i + 1);
-            self.download_library(path, url).await?;
+            self.download_library(path, url, |_| {}).await?;
         }
 
         progress.end();
@@ -242,9 +211,12 @@ impl AssetManager {
 
         progress.begin("Downloading mod loader libraries", downloads.len());
 
-        for (i, (path, url)) in downloads.iter().map(|lib| (lib.asset_path(), lib.download_url())).enumerate() {
+        let downloads = downloads.iter()
+            .map(|lib| (lib.asset_path(), lib.download_url()));
+
+        for (i, (path, url)) in downloads.enumerate() {
             progress.advance(i + 1);
-            self.download_library(&path, &url).await?;
+            self.download_library(&path, &url, |_| {}).await?;
         }
 
         progress.end();
@@ -252,7 +224,57 @@ impl AssetManager {
         Ok(())
     }
 
-    async fn download_library(&self, path: &str, url: &str) -> Result<()> {
+    pub async fn download_installer_jar(&self,
+        mod_loader: &ModLoader,
+        progress: &dyn Progress
+    ) -> Result<PathBuf> {
+        let manifest = self.get_loader_manifest(mod_loader).await?;
+
+        // The simple case is using the "installer" jar from the manifest.
+        // This is an all-in-one executable jar. Looking at my steve data cache,
+        // 1.16.x has the installer jar, 1.12.x does not.
+        let installer = manifest.dist.get_installer_lib()
+            .ok_or(Error::UnhandledModLoaderInstaller(mod_loader.to_string()))?;
+
+        progress.begin("Downloading mod loader installer", installer.size());
+
+        let installer_path = installer.asset_path();
+        self.download_library(
+            &installer_path,
+            &installer.download_url(),
+            |x| progress.advance(x)
+        ).await?;
+
+        progress.end();
+
+        return Ok(self.libs_dir.join(installer_path));
+    }
+
+    pub async fn download_server_jar(&self,
+        mc_version: &str,
+        path: &Path,
+        progress: &dyn Progress
+    ) -> Result<()> {
+        let manifest = self.get_game_manifest(mc_version).await?;
+
+        let server = manifest.downloads.server
+            .ok_or(Error::MinecraftServerNotFound(mc_version.to_string()))?;
+
+        progress.begin("Downloading server jar", server.size as usize);
+
+        self.client.download_file(&server.url, path, |x| progress.advance(x))
+            .await?;
+
+        progress.end();
+
+        Ok(())
+    }
+
+    async fn download_library(&self,
+        path: &str,
+        url: &str,
+        progress: impl Fn(usize)
+    ) -> Result<()> {
         let lib_file = self.libs_dir.join(path);
 
         // skip download if lib file already exists
@@ -260,7 +282,7 @@ impl AssetManager {
             return Ok(());
         }
 
-        self.client.download_file(url, &lib_file).await
+        self.client.download_file(url, &lib_file, progress).await
     }
 
     pub fn copy_resources(&self,

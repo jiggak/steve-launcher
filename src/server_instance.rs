@@ -24,7 +24,7 @@ use crate::{
     asset_manager::AssetManager,
     json::ServerInstanceManifest,
     launch_cmd::LaunchCommand,
-    Error, ModLoader, ModLoaderName
+    Error, ModLoader, ModLoaderName, Progress
 };
 
 const MANIFEST_FILE: &str = "manifest.json";
@@ -65,7 +65,8 @@ impl ServerInstance {
     pub async fn create(
         instance_dir: &Path,
         mc_version: &str,
-        mod_loader: Option<ModLoader>
+        mod_loader: Option<ModLoader>,
+        progress: &dyn Progress
     ) -> Result<Self> {
         // create directory to contain instance
         if !instance_dir.exists() {
@@ -94,7 +95,8 @@ impl ServerInstance {
         let assets = AssetManager::new()?;
 
         if let Some(loader) = instance.manifest.mod_loader.as_ref() {
-            let installer_jar = assets.get_loader_installer(&loader).await?;
+            let installer_jar = assets.download_installer_jar(&loader, progress)
+                .await?;
 
             let mut cmd = LaunchCommand::new(&server_dir, None, None, None);
             cmd.arg("-jar").arg(installer_jar.to_string_lossy());
@@ -106,7 +108,8 @@ impl ServerInstance {
 
             cmd.spawn()?.wait()?;
         } else {
-            assets.download_server_jar(mc_version, &server_dir.join("server.jar"))
+            let server_jar = server_dir.join("server.jar");
+            assets.download_server_jar(mc_version, &server_jar, progress)
                 .await?;
         }
 

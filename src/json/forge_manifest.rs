@@ -101,6 +101,13 @@ impl ForgeLibrary {
         }
     }
 
+    pub fn size(&self) -> usize {
+        match self {
+            ForgeLibrary::Downloads { downloads, .. } => downloads.artifact.download.size as usize,
+            ForgeLibrary::Url { .. } => panic!("Size not implemented")
+        }
+    }
+
     pub fn asset_path(&self) -> String {
         match self {
             ForgeLibrary::Downloads { downloads, .. } => downloads.artifact.asset_path(),

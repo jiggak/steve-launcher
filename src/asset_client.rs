@@ -53,7 +53,11 @@ impl AssetClient {
             .json::<T>().await?)
     }
 
-    pub async fn download_file(&self, url: &str, file_path: &Path) -> Result<()> {
+    pub async fn download_file(&self,
+        url: &str,
+        file_path: &Path,
+        progress: impl Fn(usize)
+    ) -> Result<()> {
         fs::create_dir_all(file_path.parent().unwrap())?;
 
         let mut stream = self.client.get(url)
@@ -63,8 +67,15 @@ impl AssetClient {
 
         let mut file = File::create(file_path)?;
 
+        let mut current = 0;
+
         while let Some(item) = stream.next().await {
-            io::copy(&mut item?.as_ref(), &mut file)?;
+            let item = item?;
+
+            current += item.len();
+            progress(current);
+
+            io::copy(&mut item.as_ref(), &mut file)?;
         }
 
         Ok(())

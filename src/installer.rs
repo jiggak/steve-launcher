@@ -113,11 +113,13 @@ impl Installer {
         for (i, f) in assets.iter().enumerate() {
             progress.advance(i + 1);
 
+            let file_url = f.url.as_ref().unwrap();
+
             // curse packs from modpacks.ch could include a single asset file
             // which is the full curse zip file, download and extract overrides
             if f.file_type == "cf-extract" {
                 let dest_file_path = std::env::temp_dir().join(&f.name);
-                self.client.download_file(f.url.as_ref().unwrap(), &dest_file_path)
+                self.client.download_file(file_url, &dest_file_path, |_| {})
                     .await?;
 
                 let pack = CurseForgeZip::load_zip(&dest_file_path)?;
@@ -133,7 +135,7 @@ impl Installer {
 
             // save time/bandwidth and skip download if dest file exists
             if !dest_file_path.exists() {
-                self.client.download_file(f.url.as_ref().unwrap(), &dest_file_path)
+                self.client.download_file(&file_url, &dest_file_path, |_| {})
                     .await?;
             }
 
@@ -201,7 +203,7 @@ impl Installer {
                 continue;
             }
 
-            self.client.download_file(&f.url, &dest_file_path).await?;
+            self.client.download_file(&f.url, &dest_file_path, |_| {}).await?;
         }
 
         progress.end();
