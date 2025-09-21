@@ -71,7 +71,7 @@ impl Installer {
 
     pub async fn install_pack_zip(&self,
         pack: &CurseForgeZip,
-        progress: &mut dyn Progress
+        progress: &dyn Progress
     ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
         // copy pack overrides to minecraft dir
         pack.copy_game_data(&self.dest_dir)?;
@@ -91,7 +91,7 @@ impl Installer {
     pub async fn install_pack(&self,
         pack: &ModpackVersionManifest,
         is_server: bool,
-        progress: &mut dyn Progress
+        progress: &dyn Progress
     ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
         let pack_files: Vec<_> = if is_server {
             pack.files.iter()
@@ -161,7 +161,7 @@ impl Installer {
         file_ids: Vec<u64>,
         project_ids: Vec<u64>,
         mut installed_files: Vec<PathBuf>,
-        progress: &mut dyn Progress
+        progress: &dyn Progress
     ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
         let mut file_list = self.client.get_curseforge_file_list(&file_ids).await?;
         let mut mod_list = self.client.get_curseforge_mods(&project_ids).await?;

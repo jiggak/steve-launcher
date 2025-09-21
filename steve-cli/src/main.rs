@@ -116,17 +116,17 @@ impl ProgressHandler {
 }
 
 impl Progress for ProgressHandler {
-    fn advance(&mut self, current: usize) {
+    fn advance(&self, current: usize) {
         self.progress.set_position(current as u64);
     }
 
-    fn begin(&mut self, message: &'static str, total: usize) {
+    fn begin(&self, message: &'static str, total: usize) {
         self.progress.set_length(total as u64);
         self.progress.set_message(message);
         self.progress.reset();
     }
 
-    fn end(&mut self) {
+    fn end(&self) {
         self.progress.finish_and_clear();
     }
 }

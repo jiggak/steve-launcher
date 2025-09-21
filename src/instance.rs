@@ -148,7 +148,7 @@ impl Instance {
         self.dir.join("natives")
     }
 
-    pub async fn launch(&self, progress: &mut dyn Progress) -> Result<Child> {
+    pub async fn launch(&self, progress: &dyn Progress) -> Result<Child> {
         let account = Account::load_with_tokens().await?;
 
         let profile = account.fetch_profile().await?;

@@ -87,7 +87,7 @@ pub enum Error {
 }
 
 pub trait Progress {
-    fn begin(&mut self, message: &'static str, total: usize);
-    fn end(&mut self);
-    fn advance(&mut self, current: usize);
+    fn begin(&self, message: &'static str, total: usize);
+    fn end(&self);
+    fn advance(&self, current: usize);
 }

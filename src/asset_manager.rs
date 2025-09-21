@@ -157,7 +157,7 @@ impl AssetManager {
 
     pub async fn download_assets(&self,
         asset_manifest: &AssetManifest,
-        progress: &mut dyn Progress
+        progress: &dyn Progress
     ) -> Result<()> {
         progress.begin("Downloading assets", asset_manifest.objects.len());
 
@@ -191,7 +191,7 @@ impl AssetManager {
 
     pub async fn download_libraries(&self,
         game_manifest: &GameManifest,
-        progress: &mut dyn Progress
+        progress: &dyn Progress
     ) -> Result<()> {
         let client_path = get_client_jar_path(&game_manifest.id);
         let mut lib_downloads: Vec<(&str, &String)> = vec![
@@ -220,7 +220,7 @@ impl AssetManager {
 
     pub async fn download_loader_libraries(&self,
         forge_manifest: &ForgeManifest,
-        progress: &mut dyn Progress
+        progress: &dyn Progress
     ) -> Result<()> {
         let mut downloads: Vec<&ForgeLibrary> = vec![];
 
@@ -266,7 +266,7 @@ impl AssetManager {
     pub fn copy_resources(&self,
         asset_manifest: &AssetManifest,
         target_dir: &Path,
-        progress: &mut dyn Progress
+        progress: &dyn Progress
     ) -> Result<()> {
         progress.begin("Copy resources", asset_manifest.objects.len());
 
@@ -293,7 +293,7 @@ impl AssetManager {
     pub fn extract_natives(self,
         game_manifest: &GameManifest,
         target_dir: &Path,
-        progress: &mut dyn Progress
+        progress: &dyn Progress
     ) -> Result<()> {
         let native_libs: Vec<_> = game_manifest.libraries.iter()
             .filter(|lib| lib.has_rules_match())
