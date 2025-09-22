@@ -108,9 +108,16 @@ struct ProgressHandler {
 
 impl ProgressHandler {
     fn new() -> Self {
+        let style = ProgressStyle::with_template(
+            // "{bar:40.cyan/blue} {msg} {pos}/{len}"
+            "{bar:40.cyan/blue} {msg} {percent}% [{pos}/{len}]"
+        ).unwrap();
+
+        let progress = ProgressBar::with_draw_target(None, ProgressDrawTarget::stdout())
+            .with_style(style);
+
         ProgressHandler {
-            progress: ProgressBar::with_draw_target(None, ProgressDrawTarget::stdout())
-                .with_style(ProgressStyle::with_template("{bar:40.cyan/blue} {msg} {pos}/{len}").unwrap())
+            progress
         }
     }
 }
