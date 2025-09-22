@@ -81,6 +81,7 @@ pub enum Commands {
         search_limit: u8
     },
 
+    /// Commands for creating and launching server instances
     Server {
         #[clap(subcommand)]
         command: ServerCommands
@@ -103,6 +104,7 @@ pub enum AuthCommands {
 
 #[derive(Subcommand)]
 pub enum ServerCommands {
+    /// Create new vanilla or modded minecraft server
     New {
         /// Version of minecraft or prompt to select from list when not specified
         mc_version: Option<String>,
@@ -112,16 +114,20 @@ pub enum ServerCommands {
         loader: Option<String>
     },
 
+    /// Search and install minecraft modpack server
     Modpack(ServerModpackArgs),
 
+    /// Launch server instance
     Launch
 }
 
 #[derive(Args)]
 #[group(required = true, multiple = false)]
 pub struct ServerModpackArgs {
+    /// Install modpack with FTB Pack ID
     #[arg(long)]
     pub ftb: Option<u32>,
 
+    /// Search term for modpack to install
     pub search_term: Option<String>
 }
