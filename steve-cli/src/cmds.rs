@@ -20,6 +20,7 @@ mod auth;
 mod create;
 mod launch;
 mod modpack;
+mod server;
 
 pub use {
     auth::clear_credentials,
@@ -28,7 +29,11 @@ pub use {
     create::create_instance,
     launch::launch_instance,
     modpack::modpack_search_and_install,
-    modpack::modpack_zip_install
+    modpack::modpack_zip_install,
+    server::server_new,
+    server::server_modpack_ftb,
+    server::server_modpack_search,
+    server::server_launch
 };
 
 use dialoguer::{Confirm, theme::ColorfulTheme};

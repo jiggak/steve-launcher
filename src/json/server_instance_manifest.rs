@@ -1,6 +1,6 @@
 /*
  * Steve Launcher - A Minecraft Launcher
- * Copyright (C) 2023 Josh Kropf <josh@slashdev.ca>
+ * Copyright (C) 2024 Josh Kropf <josh@slashdev.ca>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,22 +16,28 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use anyhow::Result;
-use std::path::Path;
+use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
 
-use crate::ProgressHandler;
-use steve::Instance;
+use crate::ModLoader;
 
-pub async fn launch_instance(instance_dir: &Path, detach: bool) -> Result<()> {
-    let progress = ProgressHandler::new();
+#[derive(Deserialize, Serialize)]
+pub struct ServerInstanceManifest {
+    /// Minecraft version
+    pub mc_version: String,
 
-    let instance = Instance::load(instance_dir)?;
-    let mut result = instance.launch(&progress)
-        .await?;
+    /// Server directory, relative to instance manifest
+    pub server_dir: String,
 
-    if !detach {
-        result.wait()?;
-    }
+    /// Optional absolute path of Java VM, or use "java" in system path
+    pub java_path: Option<String>,
 
-    Ok(())
+    /// Optional extra JVM arguments
+    pub java_args: Option<Vec<String>>,
+
+    /// Optional environment variables
+    pub java_env: Option<HashMap<String, String>>,
+
+    /// Optional mod loader
+    pub mod_loader: Option<ModLoader>
 }

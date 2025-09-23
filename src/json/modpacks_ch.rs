@@ -83,7 +83,7 @@ pub struct ModpackVersion {
 
 #[derive(Deserialize)]
 pub struct ModpackVersionSpecs {
-    pub id: u32,
+    pub id: i32,
     pub minimum: u32,
     pub recommended: u32
 }

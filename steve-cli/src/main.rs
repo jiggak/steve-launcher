@@ -20,13 +20,14 @@ mod cli;
 mod cmds;
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
-use std::{io, path::{Path, PathBuf}};
+use std::{env as stdenv, io, path::{Path, PathBuf}};
 
 use cmds::{
     clear_credentials, create_instance, launch_instance, msal_login,
-    modpack_search_and_install, modpack_zip_install, print_account_status
+    modpack_search_and_install, modpack_zip_install, print_account_status,
+    server_launch, server_modpack_ftb, server_modpack_search, server_new
 };
-use cli::{AuthCommands, Parser, Cli, Commands};
+use cli::{AuthCommands, Parser, Cli, Commands, ServerCommands, ServerModpackArgs};
 use steve::{env, Progress};
 
 #[tokio::main(flavor = "current_thread")]
@@ -37,15 +38,17 @@ async fn main() -> anyhow::Result<()> {
         env::set_data_dir(dir.to_str().unwrap());
     }
 
-    match cli.command {
-        Commands::Create { dir, mc_version, snapshots, loader } => {
-            let instance_dir = absolute_path(&dir)?;
+    let instance_dir = if let Some(dir) = cli.instance_dir {
+        absolute_path(&dir)?
+    } else {
+        stdenv::current_dir()?
+    };
 
+    match cli.command {
+        Commands::Create { mc_version, snapshots, loader } => {
             create_instance(&instance_dir, mc_version, snapshots, loader).await
         },
-        Commands::Launch { dir, detach } => {
-            let instance_dir = absolute_path(&dir)?;
-
+        Commands::Launch { detach } => {
             launch_instance(&instance_dir, detach).await
         },
         Commands::Auth { command } => {
@@ -58,15 +61,32 @@ async fn main() -> anyhow::Result<()> {
                 msal_login().await
             }
         },
-        Commands::Import { dir, zip_file } => {
-            let instance_dir = absolute_path(&dir)?;
-
+        Commands::Import { zip_file } => {
             modpack_zip_install(&instance_dir, &zip_file).await
         },
-        Commands::Modpack { dir, search, search_limit } => {
-            let instance_dir = absolute_path(&dir)?;
-
+        Commands::Modpack { search, search_limit } => {
             modpack_search_and_install(&instance_dir, &search, search_limit).await
+        },
+        Commands::Server { command } => {
+            match command {
+                ServerCommands::New { mc_version, loader } => {
+                    server_new(&instance_dir, mc_version, loader).await
+                },
+                ServerCommands::Modpack(arg) => {
+                    match arg {
+                        ServerModpackArgs { ftb: Some(pack_id), .. } => {
+                            server_modpack_ftb(&instance_dir, pack_id).await
+                        },
+                        ServerModpackArgs { search_term: Some(search), .. } => {
+                            server_modpack_search(&instance_dir, &search).await
+                        },
+                        _ => unreachable!("ServerModpackArgs should require either --ftb or <search term>")
+                    }
+                },
+                ServerCommands::Launch => {
+                    server_launch(&instance_dir).await
+                }
+            }
         },
         Commands::Completion => {
             Ok(print!("{}", include_str!("../steve-completion.bash")))
@@ -88,25 +108,32 @@ struct ProgressHandler {
 
 impl ProgressHandler {
     fn new() -> Self {
+        let style = ProgressStyle::with_template(
+            // "{bar:40.cyan/blue} {msg} {pos}/{len}"
+            "{bar:40.cyan/blue} {msg} {percent}% [{pos}/{len}]"
+        ).unwrap();
+
+        let progress = ProgressBar::with_draw_target(None, ProgressDrawTarget::stdout())
+            .with_style(style);
+
         ProgressHandler {
-            progress: ProgressBar::with_draw_target(None, ProgressDrawTarget::stdout())
-                .with_style(ProgressStyle::with_template("{bar:40.cyan/blue} {msg} {pos}/{len}").unwrap())
+            progress
         }
     }
 }
 
 impl Progress for ProgressHandler {
-    fn advance(&mut self, current: usize) {
+    fn advance(&self, current: usize) {
         self.progress.set_position(current as u64);
     }
 
-    fn begin(&mut self, message: &'static str, total: usize) {
+    fn begin(&self, message: &'static str, total: usize) {
         self.progress.set_length(total as u64);
         self.progress.set_message(message);
         self.progress.reset();
     }
 
-    fn end(&mut self) {
+    fn end(&self) {
         self.progress.finish_and_clear();
     }
 }

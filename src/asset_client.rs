@@ -35,6 +35,7 @@ const NEOFORGE_INDEX_URL: &str = "https://meta.prismlauncher.org/v1/net.neoforge
 const CURSE_MOD_FILES_URL: &str = "https://api.curseforge.com/v1/mods/files";
 const CURSE_MODS_URL: &str = "https://api.curseforge.com/v1/mods";
 const MODPACKS_CH_URL: &str = "https://api.modpacks.ch/public";
+const FTB_PACK_API_URL: &str = "https://api.feed-the-beast.com/v1/modpacks/modpack";
 
 pub struct AssetClient {
     client: Client
@@ -52,7 +53,11 @@ impl AssetClient {
             .json::<T>().await?)
     }
 
-    pub async fn download_file(&self, url: &str, file_path: &Path) -> Result<()> {
+    pub async fn download_file(&self,
+        url: &str,
+        file_path: &Path,
+        progress: impl Fn(usize)
+    ) -> Result<()> {
         fs::create_dir_all(file_path.parent().unwrap())?;
 
         let mut stream = self.client.get(url)
@@ -62,8 +67,15 @@ impl AssetClient {
 
         let mut file = File::create(file_path)?;
 
+        let mut current = 0;
+
         while let Some(item) = stream.next().await {
-            io::copy(&mut item?.as_ref(), &mut file)?;
+            let item = item?;
+
+            current += item.len();
+            progress(current);
+
+            io::copy(&mut item.as_ref(), &mut file)?;
         }
 
         Ok(())
@@ -129,6 +141,11 @@ impl AssetClient {
     }
 
     pub async fn get_curseforge_file_list(&self, file_ids: &Vec<u64>) -> Result<Vec<CurseForgeFile>> {
+        // avoid 400 bad request
+        if file_ids.len() == 0 {
+            return Ok(Vec::new())
+        }
+
         let response = self.client.post(CURSE_MOD_FILES_URL)
             .header("x-api-key", env::get_curse_api_key())
             .json(&HashMap::from([("fileIds", file_ids)]))
@@ -144,6 +161,11 @@ impl AssetClient {
     }
 
     pub async fn get_curseforge_mods(&self, mod_ids: &Vec<u64>) -> Result<Vec<CurseForgeMod>> {
+        // avoid 400 bad request
+        if mod_ids.len() == 0 {
+            return Ok(Vec::new())
+        }
+
         let response = self.client.post(CURSE_MODS_URL)
             .header("x-api-key", env::get_curse_api_key())
             .json(&HashMap::from([("modIds", mod_ids)]))
@@ -155,7 +177,9 @@ impl AssetClient {
     }
 
     pub async fn get_ftb_modpack_versions(&self, pack_id: u32) -> Result<ModpackManifest> {
-        let response = self.client.get(format!("{MODPACKS_CH_URL}/modpack/{pack_id}"))
+        // let url = format!("{MODPACKS_CH_URL}/modpack/{pack_id}");
+        let url = format!("{FTB_PACK_API_URL}/{pack_id}");
+        let response = self.client.get(url)
             .send().await?
             .error_for_status()?
             .json::<ModpackManifest>().await?;
@@ -164,7 +188,13 @@ impl AssetClient {
     }
 
     pub async fn get_ftb_modpack(&self, pack_id: u32, version_id: u32) -> Result<ModpackVersionManifest> {
-        let response = self.client.get(format!("{MODPACKS_CH_URL}/modpack/{pack_id}/{version_id}"))
+        // There are some slight inconsistencies between FTB API and modpacks.ch
+        // FTB Skies 2 pack has several differences in the "clientonly" flag.
+        // When using the FTB API, the files downloaded to build a server pack
+        // (excluding clientonly=true) yields a working server, modpacks.ch does not.
+        // let url = format!("{MODPACKS_CH_URL}/modpack/{pack_id}/{version_id}");
+        let url = format!("{FTB_PACK_API_URL}/{pack_id}/{version_id}");
+        let response = self.client.get(url)
             .send().await?
             .error_for_status()?
             .json::<ModpackVersionManifest>().await?;
@@ -173,7 +203,8 @@ impl AssetClient {
     }
 
     pub async fn get_curse_modpack_versions(&self, pack_id: u32) -> Result<ModpackManifest> {
-        let response = self.client.get(format!("{MODPACKS_CH_URL}/curseforge/{pack_id}"))
+        let url = format!("{MODPACKS_CH_URL}/curseforge/{pack_id}");
+        let response = self.client.get(url)
             .send().await?
             .error_for_status()?
             .json::<ModpackManifest>().await?;
@@ -182,7 +213,8 @@ impl AssetClient {
     }
 
     pub async fn get_curse_modpack(&self, pack_id: u32, version_id: u32) -> Result<ModpackVersionManifest> {
-        let response = self.client.get(format!("{MODPACKS_CH_URL}/curseforge/{pack_id}/{version_id}"))
+        let url = format!("{MODPACKS_CH_URL}/curseforge/{pack_id}/{version_id}");
+        let response = self.client.get(url)
             .send().await?
             .error_for_status()?
             .json::<ModpackVersionManifest>().await?;
@@ -193,7 +225,8 @@ impl AssetClient {
     /// * `limit` - Search result limit, max 50
     pub async fn search_modpacks(&self, term: &str, limit: u8) -> Result<ModpackSearch> {
         // 50 appears to be max, i.e. setting limit to 99 but response includes "limit: 50"
-        let response = self.client.get(format!("{MODPACKS_CH_URL}/modpack/search/{limit}?term={term}"))
+        let url = format!("{MODPACKS_CH_URL}/modpack/search/{limit}?term={term}");
+        let response = self.client.get(url)
             .send().await?
             .error_for_status()?
             .json::<ModpackSearch>().await?;

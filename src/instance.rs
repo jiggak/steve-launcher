@@ -17,19 +17,15 @@
  */
 
 use anyhow::{bail, Result};
-use std::{
-    collections::HashMap, fs, path::{Path, PathBuf}, process::{Child, Command}
-};
+use std::{fs, path::{Path, PathBuf}, process::Child};
 
 use crate::{
-    account::Account, asset_client::AssetClient, asset_manager::{
-        self, AssetManager, get_client_jar_path, make_forge_modded_jar
-    },
-    CurseForgeZip, env, Error, json::{
-        CurseForgeFile, CurseForgeMod, ForgeDistribution, InstanceManifest,
-        ModLoader, ModpackVersionManifest
-    },
-    Progress
+    account::Account,
+    asset_manager::{self, get_client_jar_path, make_forge_modded_jar, AssetManager},
+    env,
+    json::{ForgeDistribution, InstanceManifest, ModLoader},
+    launch_cmd::LaunchCommand,
+    Error, Progress
 };
 
 const MANIFEST_FILE: &str = "manifest.json";
@@ -102,169 +98,10 @@ impl Instance {
         Ok(instance)
     }
 
-    pub async fn install_pack_zip(&self,
-        pack: &CurseForgeZip,
-        progress: &mut dyn Progress
-    ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
-        // copy pack overrides to minecraft dir
-        pack.copy_game_data(&self.game_dir())?;
-        let override_files = pack.list_overrides(&[
-            "mods", "resourcepacks", "shaderpacks"
-        ])?;
-
-        let client = AssetClient::new();
-        let file_ids = pack.manifest.get_file_ids();
-        let project_ids = pack.manifest.get_project_ids();
-
-        self.download_curseforge_files(
-            &client,
-            file_ids,
-            project_ids,
-            Some(override_files),
-            progress
-        ).await
-    }
-
-    pub async fn install_pack(&self,
-        pack: &ModpackVersionManifest,
-        progress: &mut dyn Progress
-    ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
-        let client = AssetClient::new();
-
-        let assets: Vec<_> = pack.files.iter()
-            .filter(|f| f.url.is_some())
-            .collect();
-
-        let mut override_files: Option<Vec<PathBuf>> = None;
-
-        progress.begin("Downloading assets...", assets.len());
-
-        for (i, f) in assets.iter().enumerate() {
-            progress.advance(i + 1);
-
-            // curse packs from modpacks.ch could include a single asset file
-            // which is the full curse zip file, download and extract overrides
-            if f.file_type == "cf-extract" {
-                let dest_file_path = std::env::temp_dir().join(&f.name);
-                client.download_file(f.url.as_ref().unwrap(), &dest_file_path).await?;
-
-                let pack = CurseForgeZip::load_zip(&dest_file_path)?;
-                pack.copy_game_data(&self.game_dir())?;
-                override_files = Some(pack.list_overrides(&[
-                    "mods", "resourcepacks", "shaderpacks"
-                ])?);
-
-                continue;
-            }
-
-            let dest_file_path = self.game_dir()
-                .join(&f.path)
-                .join(&f.name);
-
-            // save time/bandwidth and skip download if dest file exists
-            if dest_file_path.exists() {
-                continue;
-            }
-
-            client.download_file(f.url.as_ref().unwrap(), &dest_file_path).await?;
-        }
-
-        progress.end();
-
-        let mods: Vec<_> = pack.files.iter()
-            .filter_map(|f| f.curseforge.as_ref())
-            .collect();
-
-        let file_ids = mods.iter().map(|c| c.file_id).collect();
-        let project_ids = mods.iter().map(|c| c.project_id).collect();
-
-        self.download_curseforge_files(
-            &client,
-            file_ids,
-            project_ids,
-            override_files,
-            progress
-        ).await
-    }
-
-    async fn download_curseforge_files(&self,
-        client: &AssetClient,
-        file_ids: Vec<u64>,
-        project_ids: Vec<u64>,
-        override_files: Option<Vec<PathBuf>>,
-        progress: &mut dyn Progress
-    ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
-        let mut file_list = client.get_curseforge_file_list(&file_ids).await?;
-        let mut mod_list = client.get_curseforge_mods(&project_ids).await?;
-
-        if file_list.len() != mod_list.len() {
-            bail!(Error::CurseFileListMismatch {
-                file_list_len: file_list.len(),
-                mod_list_len: mod_list.len()
-            });
-        }
-
-        // sort the lists so that we can zip them into list of pairs
-        file_list.sort_by(|a, b| a.mod_id.cmp(&b.mod_id));
-        mod_list.sort_by(|a, b| a.mod_id.cmp(&b.mod_id));
-
-        let file_downloads: Vec<_> = file_list.iter()
-            .zip(mod_list)
-            .map(|(f, m)| FileDownload::new(f, &m))
-            .collect();
-
-        // filter files that can be auto-downloaded, and those that must be manually downloaded
-        let (downloads, blocked): (Vec<_>, Vec<_>) = file_downloads.clone().into_iter()
-            .partition(|f| f.can_auto_download);
-
-        progress.begin("Downloading mods...", downloads.len());
-
-        // create mods dir in case there are zero automated downloads with one or more manual downloads
-        fs::create_dir_all(self.mods_dir())?;
-
-        for (i, f) in downloads.iter().enumerate() {
-            progress.advance(i + 1);
-
-            let dest_file_path = self.get_file_path(f);
-
-            // save time/bandwidth and skip download if dest file exists
-            if dest_file_path.exists() {
-                continue;
-            }
-
-            client.download_file(&f.url, &dest_file_path).await?;
-        }
-
-        progress.end();
-
-        let mut keep_files = file_downloads.iter()
-            .map(|f| PathBuf::from(&f.file_name))
-            .collect();
-
-        if let Some(override_files) = override_files {
-            keep_files = [
-                keep_files,
-                override_files
-            ].concat();
-        }
-
-        let delete_files = [
-            list_files_for_delete(&self.mods_dir(), &keep_files)?,
-            list_files_for_delete(&self.resource_pack_dir(), &keep_files)?,
-            list_files_for_delete(&self.shader_pack_dir(), &keep_files)?
-        ].concat();
-
-        if !blocked.is_empty() {
-            Ok((delete_files, Some(blocked)))
-        } else {
-            Ok((delete_files, None))
-        }
-    }
-
     pub fn load(instance_dir: &Path) -> Result<Instance> {
         let manifest_path = instance_dir.join(MANIFEST_FILE);
         if !manifest_path.exists() {
-            bail!(Error::InstanceNotFound(instance_dir.to_str().unwrap().to_string()))
+            bail!(Error::InstanceNotFound(instance_dir.to_string_lossy().to_string()))
         }
 
         let json = fs::read_to_string(manifest_path)?;
@@ -311,25 +148,7 @@ impl Instance {
         self.dir.join("natives")
     }
 
-    pub fn get_file_type_dir(&self, file_type: &FileType) -> PathBuf {
-        match file_type {
-            FileType::Mod => self.mods_dir(),
-            FileType::Resource => self.resource_pack_dir(),
-            FileType::Shaders => self.shader_pack_dir()
-        }
-    }
-
-    pub fn get_file_path(&self, file: &FileDownload) -> PathBuf {
-        self.get_file_type_dir(&file.file_type).join(&file.file_name)
-    }
-
-    pub fn install_file(&self, file: &FileDownload, src_path: &Path) -> std::io::Result<()> {
-        let dest_file = self.get_file_path(file);
-        fs::copy(src_path, dest_file)?;
-        Ok(())
-    }
-
-    pub async fn launch(&self, progress: &mut dyn Progress) -> Result<Child> {
+    pub async fn launch(&self, progress: &dyn Progress) -> Result<Child> {
         let account = Account::load_with_tokens().await?;
 
         let profile = account.fetch_profile().await?;
@@ -365,7 +184,13 @@ impl Instance {
 
         assets.extract_natives(&game_manifest, &self.natives_dir(), progress)?;
 
-        let mut cmd = LaunchCommand::new(self);
+        let mut cmd = LaunchCommand::new(
+            &self.game_dir(),
+            self.manifest.java_path.as_ref(),
+            self.manifest.java_args.as_ref(),
+            self.manifest.java_env.as_ref()
+        );
+
         fs::create_dir_all(self.game_dir())?;
 
         let mut main_jar: String = get_client_jar_path(&game_manifest.id);
@@ -374,8 +199,9 @@ impl Instance {
             match &loader_manifest.dist {
                 // legacy forge distributions required modifying the `minecraft.jar` file
                 ForgeDistribution::Legacy { jar_mods, fml_libs } => {
-                    main_jar = make_forge_modded_jar(&main_jar, &loader_manifest.version, &jar_mods)
-                        ?.to_string_lossy().to_string();
+                    main_jar = make_forge_modded_jar(&main_jar, &loader_manifest.version, &jar_mods)?
+                        .to_string_lossy()
+                        .to_string();
 
                     // forge will throw an error on startup attempting to download
                     // these libraries (404 not found), unless they already exist
@@ -448,10 +274,7 @@ impl Instance {
 
         if let Some(loader_manifest) = &loader_manifest {
             if let ForgeDistribution::Current { libraries, .. } = &loader_manifest.dist {
-                libs.extend(
-                    libraries.iter()
-                        .map(|lib| lib.asset_path())
-                );
+                libs.extend(libraries.iter().map(|lib| lib.asset_path()));
             }
         }
 
@@ -460,8 +283,11 @@ impl Instance {
                 .map(|p| env::get_libs_dir().join(p))
         )?;
 
-        let auth_session = format!("token:{token}:{profileId}",
-            token = account.access_token(), profileId = profile.id);
+        let auth_session = format!(
+            "token:{token}:{profileId}",
+            token = account.access_token(),
+            profileId = profile.id
+        );
 
         cmd.arg_ctx("version_name", &self.manifest.mc_version);
         cmd.arg_ctx("version_type", game_manifest.release_type);
@@ -487,132 +313,4 @@ impl Instance {
 
         Ok(cmd.spawn()?)
     }
-}
-
-struct LaunchCommand {
-    cmd: Command,
-    ctx: HashMap<&'static str, String>,
-    args: Vec<String>
-}
-
-impl LaunchCommand {
-    fn new(instance: &Instance) -> Self {
-        // use java override path from instance manifest, or default to "java" in PATH
-        let mut cmd = if let Some(path) = &instance.manifest.java_path {
-            Command::new(path)
-        } else {
-            Command::new("java")
-        };
-
-        if let Some(args) = &instance.manifest.java_args {
-            cmd.args(args);
-        }
-
-        if let Some(vars) = &instance.manifest.java_env {
-            cmd.envs(vars);
-        }
-
-        // set current directory for log output
-        cmd.current_dir(instance.game_dir());
-
-        Self {
-            cmd: cmd,
-            ctx: HashMap::new(),
-            args: Vec::new()
-        }
-    }
-
-    fn arg_ctx<S: Into<String>>(&mut self, key: &'static str, val: S) -> &mut Self {
-        self.ctx.insert(key, val.into());
-        self
-    }
-
-    fn arg<S: Into<String>>(&mut self, val: S) -> &mut Self {
-        self.args.push(val.into());
-        self
-    }
-
-    fn args<I>(&mut self, iter: I) -> &mut Self
-        where I: IntoIterator, I::Item: Into<String>
-    {
-        iter.into_iter().for_each(|v| self.args.push(v.into()));
-        self
-    }
-
-    fn spawn(&mut self) -> std::io::Result<Child> {
-        for arg in &self.args {
-            self.cmd.arg(
-                shellexpand::env_with_context_no_errors(
-                    &arg,
-                    |var:&str| self.ctx.get(var)
-                ).to_string()
-            );
-        }
-
-        self.cmd.spawn()
-    }
-}
-
-#[derive(Clone)]
-pub enum FileType {
-    Mod,
-    Resource,
-    Shaders
-}
-
-#[derive(Clone)]
-pub struct FileDownload {
-    pub file_name: String,
-    pub file_type: FileType,
-    pub can_auto_download: bool,
-    pub url: String
-}
-
-impl FileDownload {
-    pub fn new(f: &CurseForgeFile, m: &CurseForgeMod) -> Self {
-        // it feels brittle using hard coded classId, but I don't see anything
-        // else that can differentiate mods|resource pack|etc
-        let file_type = match m.class_id {
-            6 => FileType::Mod,
-            12 => FileType::Resource,
-            6552 => FileType::Shaders,
-            x => panic!("Unimplemented curseforge class_id {x}")
-        };
-
-        // url for user to download the file manually
-        let user_dl_url = format!("{site_url}/download/{file_id}",
-            site_url = m.links.website_url, file_id = f.file_id);
-
-        FileDownload {
-            file_name: f.file_name.clone(),
-            file_type,
-            can_auto_download: f.download_url.is_some(),
-            url: match &f.download_url {
-                Some(v) => v.clone(),
-                None => user_dl_url
-            }
-        }
-    }
-}
-
-fn list_files_for_delete(dir: &Path, keep_files: &Vec<PathBuf>) -> Result<Vec<PathBuf>> {
-    let mut delete_files = Vec::new();
-
-    if dir.exists() {
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-
-            if !entry.file_type()?.is_file() {
-                continue;
-            }
-
-            let path = entry.path();
-            let rel_path = path.strip_prefix(dir)?;
-            if !keep_files.iter().any(|f| f == rel_path) {
-                delete_files.push(path);
-            }
-        }
-    }
-
-    Ok(delete_files)
 }

@@ -45,7 +45,7 @@ pub struct InstanceManifest {
     pub custom_jar: Option<String>
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub enum ModLoaderName {
     #[serde(rename = "forge")]
     Forge,
@@ -93,5 +93,11 @@ impl FromStr for ModLoader {
             name: parts.0.parse()?,
             version: parts.1.to_string()
         })
+    }
+}
+
+impl ToString for ModLoader {
+    fn to_string(&self) -> String {
+        format!("{}-{}", self.name.to_string(), self.version)
     }
 }

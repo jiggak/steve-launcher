@@ -126,7 +126,7 @@ impl AssetManager {
 
     pub async fn download_assets(&self,
         asset_manifest: &AssetManifest,
-        progress: &mut dyn Progress
+        progress: &dyn Progress
     ) -> Result<()> {
         progress.begin("Downloading assets", asset_manifest.objects.len());
 
@@ -155,12 +155,12 @@ impl AssetManager {
 
         let url = format!("https://resources.download.minecraft.net/{hash_prefix}/{hash}");
 
-        self.client.download_file(&url, &object_file).await
+        self.client.download_file(&url, &object_file, |_| {}).await
     }
 
     pub async fn download_libraries(&self,
         game_manifest: &GameManifest,
-        progress: &mut dyn Progress
+        progress: &dyn Progress
     ) -> Result<()> {
         let client_path = get_client_jar_path(&game_manifest.id);
         let mut lib_downloads: Vec<(&str, &String)> = vec![
@@ -179,7 +179,7 @@ impl AssetManager {
 
         for (i, (path, url)) in lib_downloads.iter().enumerate() {
             progress.advance(i + 1);
-            self.download_library(path, url).await?;
+            self.download_library(path, url, |_| {}).await?;
         }
 
         progress.end();
@@ -189,7 +189,7 @@ impl AssetManager {
 
     pub async fn download_loader_libraries(&self,
         forge_manifest: &ForgeManifest,
-        progress: &mut dyn Progress
+        progress: &dyn Progress
     ) -> Result<()> {
         let mut downloads: Vec<&ForgeLibrary> = vec![];
 
@@ -211,9 +211,12 @@ impl AssetManager {
 
         progress.begin("Downloading mod loader libraries", downloads.len());
 
-        for (i, (path, url)) in downloads.iter().map(|lib| (lib.asset_path(), lib.download_url())).enumerate() {
+        let downloads = downloads.iter()
+            .map(|lib| (lib.asset_path(), lib.download_url()));
+
+        for (i, (path, url)) in downloads.enumerate() {
             progress.advance(i + 1);
-            self.download_library(&path, &url).await?;
+            self.download_library(&path, &url, |_| {}).await?;
         }
 
         progress.end();
@@ -221,7 +224,57 @@ impl AssetManager {
         Ok(())
     }
 
-    async fn download_library(&self, path: &str, url: &str) -> Result<()> {
+    pub async fn download_installer_jar(&self,
+        mod_loader: &ModLoader,
+        progress: &dyn Progress
+    ) -> Result<PathBuf> {
+        let manifest = self.get_loader_manifest(mod_loader).await?;
+
+        // The simple case is using the "installer" jar from the manifest.
+        // This is an all-in-one executable jar. Looking at my steve data cache,
+        // 1.16.x has the installer jar, 1.12.x does not.
+        let installer = manifest.dist.get_installer_lib()
+            .ok_or(Error::UnhandledModLoaderInstaller(mod_loader.to_string()))?;
+
+        progress.begin("Downloading mod loader installer", installer.size());
+
+        let installer_path = installer.asset_path();
+        self.download_library(
+            &installer_path,
+            &installer.download_url(),
+            |x| progress.advance(x)
+        ).await?;
+
+        progress.end();
+
+        return Ok(self.libs_dir.join(installer_path));
+    }
+
+    pub async fn download_server_jar(&self,
+        mc_version: &str,
+        path: &Path,
+        progress: &dyn Progress
+    ) -> Result<()> {
+        let manifest = self.get_game_manifest(mc_version).await?;
+
+        let server = manifest.downloads.server
+            .ok_or(Error::MinecraftServerNotFound(mc_version.to_string()))?;
+
+        progress.begin("Downloading server jar", server.size as usize);
+
+        self.client.download_file(&server.url, path, |x| progress.advance(x))
+            .await?;
+
+        progress.end();
+
+        Ok(())
+    }
+
+    async fn download_library(&self,
+        path: &str,
+        url: &str,
+        progress: impl Fn(usize)
+    ) -> Result<()> {
         let lib_file = self.libs_dir.join(path);
 
         // skip download if lib file already exists
@@ -229,13 +282,13 @@ impl AssetManager {
             return Ok(());
         }
 
-        self.client.download_file(url, &lib_file).await
+        self.client.download_file(url, &lib_file, progress).await
     }
 
     pub fn copy_resources(&self,
         asset_manifest: &AssetManifest,
         target_dir: &Path,
-        progress: &mut dyn Progress
+        progress: &dyn Progress
     ) -> Result<()> {
         progress.begin("Copy resources", asset_manifest.objects.len());
 
@@ -262,7 +315,7 @@ impl AssetManager {
     pub fn extract_natives(self,
         game_manifest: &GameManifest,
         target_dir: &Path,
-        progress: &mut dyn Progress
+        progress: &dyn Progress
     ) -> Result<()> {
         let native_libs: Vec<_> = game_manifest.libraries.iter()
             .filter(|lib| lib.has_rules_match())

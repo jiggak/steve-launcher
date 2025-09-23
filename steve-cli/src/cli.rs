@@ -17,7 +17,7 @@
  */
 
 pub use clap::Parser;
-use clap::Subcommand;
+use clap::{Args, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -28,6 +28,10 @@ pub struct Cli {
     #[arg(short, verbatim_doc_comment)]
     pub data_dir: Option<PathBuf>,
 
+    /// Instance directory with manifest and game files, defaults to "."
+    #[arg(short, global = true)]
+    pub instance_dir: Option<PathBuf>,
+
     #[command(subcommand)]
     pub command: Commands
 }
@@ -36,9 +40,6 @@ pub struct Cli {
 pub enum Commands {
     /// Create instance directory and manifest file
     Create {
-        /// Path to directory of new instance
-        dir: PathBuf,
-
         /// Version of minecraft or prompt to select from list when not specified
         mc_version: Option<String>,
 
@@ -53,9 +54,6 @@ pub enum Commands {
 
     /// Download instance assets and launch
     Launch {
-        /// Path to directory of instance
-        dir: PathBuf,
-
         /// Allow steve to exit while the java process is running
         #[arg(short)]
         detach: bool
@@ -69,24 +67,24 @@ pub enum Commands {
 
     /// Install CurseForge modpack zip into new or existing instance
     Import {
-        /// Path to instance directory
-        dir: PathBuf,
-
         /// Path to CurseForge modpack zip
         zip_file: PathBuf
     },
 
     /// Search and install FTB or CurseForge modpack into new or existing instance
     Modpack {
-        /// Path to instance directory
-        dir: PathBuf,
-
         /// Modpack search term
         search: String,
 
         /// Maximum number of search results
         #[arg(short, long, default_value_t = 5, value_parser = clap::value_parser!(u8).range(1..50))]
         search_limit: u8
+    },
+
+    /// Commands for creating and launching server instances
+    Server {
+        #[clap(subcommand)]
+        command: ServerCommands
     },
 
     /// Output bash completion code
@@ -102,4 +100,34 @@ pub enum AuthCommands {
 
     /// Delete stored account details
     Clear
+}
+
+#[derive(Subcommand)]
+pub enum ServerCommands {
+    /// Create new vanilla or modded minecraft server
+    New {
+        /// Version of minecraft or prompt to select from list when not specified
+        mc_version: Option<String>,
+
+        /// Mod laoder <forge|neoforge>[-<version>], prompt for version when not specified
+        #[arg(long)]
+        loader: Option<String>
+    },
+
+    /// Search and install minecraft modpack server
+    Modpack(ServerModpackArgs),
+
+    /// Launch server instance
+    Launch
+}
+
+#[derive(Args)]
+#[group(required = true, multiple = false)]
+pub struct ServerModpackArgs {
+    /// Install modpack with FTB Pack ID
+    #[arg(long)]
+    pub ftb: Option<u32>,
+
+    /// Search term for modpack to install
+    pub search_term: Option<String>
 }

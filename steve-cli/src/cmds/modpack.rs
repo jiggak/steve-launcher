@@ -27,8 +27,9 @@ use std::{
 
 use crate::ProgressHandler;
 use steve::{
-    AssetClient, CurseForgeZip, DownloadWatcher, FileDownload, Instance,
-    ModpackManifest, ModpackVersion, Progress, WatcherMessage
+    AssetClient, CurseForgeZip, DownloadWatcher, FileDownload, Installer,
+    Instance, ModpackManifest, ModpackVersion, ModpackVersionManifest, Progress,
+    WatcherMessage
 };
 use super::{console_theme, prompt_confirm};
 
@@ -37,7 +38,34 @@ pub async fn modpack_search_and_install(
     search: &str,
     limit: u8
 ) -> Result<()> {
-    let mut progress = ProgressHandler::new();
+    let pack = search_modpacks(search, limit).await?;
+
+    let instance = if Instance::exists(instance_dir) {
+        if !prompt_confirm("Instance already exists, are you sure you want to install the pack here?")? {
+            return Ok(())
+        }
+
+        let mut instance = Instance::load(instance_dir)?;
+
+        instance.set_mc_version(pack.get_minecraft_version()?)?;
+        instance.set_mod_loader(pack.get_mod_loader()?)?;
+
+        instance
+    } else {
+        Instance::create(
+            instance_dir,
+            &pack.get_minecraft_version()?,
+            pack.get_mod_loader()?
+        ).await?
+    };
+
+    install_pack(&instance.game_dir(), false, &pack).await?;
+
+    Ok(())
+}
+
+pub async fn search_modpacks(search: &str, limit: u8) -> Result<ModpackVersionManifest> {
+    let progress = ProgressHandler::new();
     let client = AssetClient::new();
 
     let results = client.search_modpacks(search, limit).await?;
@@ -88,34 +116,42 @@ pub async fn modpack_search_and_install(
         client.get_ftb_modpack(selected_pack.pack_id, selected_version.version_id).await?
     };
 
-    let instance = if Instance::exists(instance_dir) {
-        if !prompt_confirm("Instance already exists, are you sure you want to install the pack here?")? {
-            return Ok(())
-        }
+    Ok(pack)
+}
 
-        let mut instance = Instance::load(instance_dir)?;
+pub async fn get_ftb_pack(pack_id: u32) -> Result<ModpackVersionManifest> {
+    let client = AssetClient::new();
 
-        instance.set_mc_version(pack.get_minecraft_version()?)?;
-        instance.set_mod_loader(pack.get_mod_loader()?)?;
+    let manifest = client.get_ftb_modpack_versions(pack_id).await?;
 
-        instance
-    } else {
-        Instance::create(
-            instance_dir,
-            &pack.get_minecraft_version()?,
-            pack.get_mod_loader()?
-        ).await?
-    };
+    let selection = Select::with_theme(&console_theme())
+        .with_prompt("Select modpack version")
+        .items(&format_modpack_versions(manifest.versions.iter()))
+        .default(0)
+        .interact()?;
 
-    let (remove, downloads) = instance.install_pack(&pack, &mut progress)
+    let version = &manifest.versions[selection];
+
+    Ok(client.get_ftb_modpack(pack_id, version.version_id).await?)
+}
+
+pub async fn install_pack(
+    dest_dir: &Path,
+    is_server: bool,
+    pack: &ModpackVersionManifest
+) -> Result<()> {
+    let progress = ProgressHandler::new();
+    let installer = Installer::new(dest_dir);
+
+    let (remove, downloads) = installer.install_pack(pack, is_server, &progress)
         .await?;
 
     if let Some(downloads) = downloads {
-        download_blocked(instance, downloads)?;
+        download_blocked(&installer, downloads)?;
     }
 
     if !remove.is_empty() {
-        remove_files_prompt(instance_dir, &remove)?;
+        remove_files_prompt(dest_dir, &remove)?;
     }
 
     Ok(())
@@ -125,7 +161,7 @@ pub async fn modpack_zip_install(
     instance_dir: &Path,
     zip_file: &Path
 ) -> Result<()> {
-    let mut progress = ProgressHandler::new();
+    let progress = ProgressHandler::new();
 
     let pack = CurseForgeZip::load_zip(zip_file)?;
 
@@ -148,11 +184,12 @@ pub async fn modpack_zip_install(
         ).await?
     };
 
-    let (remove, downloads) = instance.install_pack_zip(&pack, &mut progress)
+    let installer = Installer::new(&instance.game_dir());
+    let (remove, downloads) = installer.install_pack_zip(&pack, &progress)
         .await?;
 
     if let Some(downloads) = downloads {
-        download_blocked(instance, downloads)?;
+        download_blocked(&installer, downloads)?;
     }
 
     if !remove.is_empty() {
@@ -162,7 +199,7 @@ pub async fn modpack_zip_install(
     Ok(())
 }
 
-fn download_blocked(instance: Instance, downloads: Vec<FileDownload>) -> Result<()> {
+fn download_blocked(installer: &Installer, downloads: Vec<FileDownload>) -> Result<()> {
     let watcher = DownloadWatcher::new(
         downloads.iter()
             .map(|f| f.file_name.as_str())
@@ -172,7 +209,7 @@ fn download_blocked(instance: Instance, downloads: Vec<FileDownload>) -> Result<
     for f in &downloads {
         if watcher.is_file_complete(&f.file_name) {
             let file_path = watcher.watch_dir.join(&f.file_name);
-            instance.install_file(f, &file_path)?;
+            installer.install_file(f, &file_path)?;
         }
     }
 
@@ -200,7 +237,7 @@ fn download_blocked(instance: Instance, downloads: Vec<FileDownload>) -> Result<
                     let file = downloads.iter()
                         .find(|d| d.file_name == file_name)
                         .unwrap();
-                    instance.install_file(file, &file_path)?;
+                    installer.install_file(file, &file_path)?;
                     print_download_state(&term, &watcher, &downloads)?;
                 },
                 WatcherMessage::AllComplete => {

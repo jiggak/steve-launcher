@@ -23,9 +23,12 @@ mod curseforge_zip;
 mod download_watcher;
 pub mod env;
 mod fs;
+mod installer;
 mod instance;
+mod launch_cmd;
 mod json;
 mod rules;
+mod server_instance;
 mod zip;
 
 pub use {
@@ -34,12 +37,15 @@ pub use {
     curseforge_zip::CurseForgeZip,
     download_watcher::DownloadWatcher,
     download_watcher::WatcherMessage,
+    installer::Installer,
+    installer::FileDownload,
     instance::Instance,
-    instance::FileDownload,
     json::ModLoader,
     json::ModLoaderName,
     json::ModpackManifest,
-    json::ModpackVersion
+    json::ModpackVersion,
+    json::ModpackVersionManifest,
+    server_instance::ServerInstance
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -52,6 +58,8 @@ pub enum Error {
     MinecraftTargetNotFound,
     #[error("Minecraft version '{0}' not found")]
     MinecraftVersionNotFound(String),
+    #[error("Minecraft version '{0}' does not include server download")]
+    MinecraftServerNotFound(String),
     #[error("Forge version '{0}' not found")]
     ForgeVersionNotFound(String),
     #[error("Unable to parse '{version}' with lenient_semver")]
@@ -75,11 +83,13 @@ pub enum Error {
     #[error("Invalid mod loader name '{0}'")]
     InvalidModLoaderName(String),
     #[error("Invalid mod loader ID format '{0}'; expected [name]-[version]")]
-    InvalidModLoaderId(String)
+    InvalidModLoaderId(String),
+    #[error("Unhandled modloader installer download for {0}")]
+    UnhandledModLoaderInstaller(String)
 }
 
 pub trait Progress {
-    fn begin(&mut self, message: &'static str, total: usize);
-    fn end(&mut self);
-    fn advance(&mut self, current: usize);
+    fn begin(&self, message: &'static str, total: usize);
+    fn end(&self);
+    fn advance(&self, current: usize);
 }
