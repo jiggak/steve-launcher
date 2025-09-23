@@ -141,7 +141,7 @@ impl AssetClient {
     }
 
     pub async fn get_curseforge_file_list(&self, file_ids: &Vec<u64>) -> Result<Vec<CurseForgeFile>> {
-        // avoid 400 bad response
+        // avoid 400 bad request
         if file_ids.len() == 0 {
             return Ok(Vec::new())
         }
@@ -161,7 +161,7 @@ impl AssetClient {
     }
 
     pub async fn get_curseforge_mods(&self, mod_ids: &Vec<u64>) -> Result<Vec<CurseForgeMod>> {
-        // avoid 400 bad response
+        // avoid 400 bad request
         if mod_ids.len() == 0 {
             return Ok(Vec::new())
         }
@@ -189,9 +189,9 @@ impl AssetClient {
 
     pub async fn get_ftb_modpack(&self, pack_id: u32, version_id: u32) -> Result<ModpackVersionManifest> {
         // There are some slight inconsistencies between FTB API and modpacks.ch
-        // FTB Skies 2 pack has several differences in the "clientonly" flag
+        // FTB Skies 2 pack has several differences in the "clientonly" flag.
         // When using the FTB API, the files downloaded to build a server pack
-        // (excluding clientonly=true) yields a working server, modpacks.ch does not
+        // (excluding clientonly=true) yields a working server, modpacks.ch does not.
         // let url = format!("{MODPACKS_CH_URL}/modpack/{pack_id}/{version_id}");
         let url = format!("{FTB_PACK_API_URL}/{pack_id}/{version_id}");
         let response = self.client.get(url)
