@@ -88,8 +88,11 @@ pub enum Error {
     UnhandledModLoaderInstaller(String)
 }
 
+pub trait BeginProgress {
+    fn begin<S: Into<String>>(&self, message: S, length: usize) -> Box<dyn Progress>;
+}
+
 pub trait Progress {
-    fn begin(&self, message: &'static str, total: usize);
-    fn end(&self);
     fn advance(&self, current: usize);
+    fn end(&self);
 }

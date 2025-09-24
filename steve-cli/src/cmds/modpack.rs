@@ -25,10 +25,10 @@ use std::{
     thread::{self, Scope}
 };
 
-use crate::ProgressHandler;
+use crate::ProgressBars;
 use steve::{
-    AssetClient, CurseForgeZip, DownloadWatcher, FileDownload, Installer,
-    Instance, ModpackManifest, ModpackVersion, ModpackVersionManifest, Progress,
+    AssetClient, BeginProgress, CurseForgeZip, DownloadWatcher, FileDownload,
+    Installer, Instance, ModpackManifest, ModpackVersion, ModpackVersionManifest,
     WatcherMessage
 };
 use super::{console_theme, prompt_confirm};
@@ -65,14 +65,14 @@ pub async fn modpack_search_and_install(
 }
 
 pub async fn search_modpacks(search: &str, limit: u8) -> Result<ModpackVersionManifest> {
-    let progress = ProgressHandler::new();
+    let progress = ProgressBars::new();
     let client = AssetClient::new();
 
     let results = client.search_modpacks(search, limit).await?;
 
     let mut search_results = Vec::new();
 
-    progress.begin("Retrieving search results", results.total as usize);
+    let progress = progress.begin("Retrieving search results", results.total as usize);
     let mut count:usize = 0;
 
     for pack_id in results.pack_ids {
@@ -140,7 +140,7 @@ pub async fn install_pack(
     is_server: bool,
     pack: &ModpackVersionManifest
 ) -> Result<()> {
-    let progress = ProgressHandler::new();
+    let progress = ProgressBars::new();
     let installer = Installer::new(dest_dir);
 
     let (remove, downloads) = installer.install_pack(pack, is_server, &progress)
@@ -161,7 +161,7 @@ pub async fn modpack_zip_install(
     instance_dir: &Path,
     zip_file: &Path
 ) -> Result<()> {
-    let progress = ProgressHandler::new();
+    let progress = ProgressBars::new();
 
     let pack = CurseForgeZip::load_zip(zip_file)?;
 

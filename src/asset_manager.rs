@@ -20,7 +20,7 @@ use anyhow::{Context, Result};
 use semver::{Version, VersionReq};
 use std::{collections::HashMap, fs, path::Path, path::PathBuf};
 
-use crate::{asset_client::AssetClient, env, Error, Progress, zip};
+use crate::{asset_client::AssetClient, env, zip, BeginProgress, Error};
 use crate::json::{
     AssetManifest, ForgeDistribution, ForgeLibrary, ForgeManifest, GameLibrary,
     GameManifest, ModLoader
@@ -126,21 +126,21 @@ impl AssetManager {
 
     pub async fn download_assets(&self,
         asset_manifest: &AssetManifest,
-        progress: &dyn Progress
+        progress: &impl BeginProgress
     ) -> Result<()> {
-        progress.begin("Downloading assets", asset_manifest.objects.len());
+        let main_progress = progress.begin("Downloading assets", asset_manifest.objects.len());
 
-        for (i, (_, obj)) in asset_manifest.objects.iter().enumerate() {
-            progress.advance(i + 1);
-            self.download_asset(&obj.hash).await?;
+        for (i, (f, obj)) in asset_manifest.objects.iter().enumerate() {
+            let file_progress = progress.begin(f, obj.size as usize);
+            self.download_asset(&obj.hash, |x| file_progress.advance(x)).await?;
+
+            main_progress.advance(i + 1);
         }
-
-        progress.end();
 
         Ok(())
     }
 
-    async fn download_asset(&self, hash: &str) -> Result<()> {
+    async fn download_asset(&self, hash: &str, progress: impl Fn(usize)) -> Result<()> {
         // first 2 chars of hash is used for directory of objects
         let hash_prefix = &hash[0..2];
 
@@ -155,16 +155,16 @@ impl AssetManager {
 
         let url = format!("https://resources.download.minecraft.net/{hash_prefix}/{hash}");
 
-        self.client.download_file(&url, &object_file, |_| {}).await
+        self.client.download_file(&url, &object_file, progress).await
     }
 
     pub async fn download_libraries(&self,
         game_manifest: &GameManifest,
-        progress: &dyn Progress
+        progress: &impl BeginProgress
     ) -> Result<()> {
         let client_path = get_client_jar_path(&game_manifest.id);
-        let mut lib_downloads: Vec<(&str, &String)> = vec![
-            (client_path.as_str(), &game_manifest.downloads.client.url)
+        let mut lib_downloads: Vec<(_, _)> = vec![
+            (client_path.as_ref(), &game_manifest.downloads.client)
         ];
 
         lib_downloads.extend(
@@ -172,24 +172,24 @@ impl AssetManager {
                 .filter(|lib| lib.has_rules_match())
                 // FIXME how to let this result error propagate?
                 .flat_map(|lib| lib.artifacts_for_download().unwrap())
-                .map(|a| (a.path.as_str(), &a.download.url))
+                .map(|a| (a.path.as_ref(), &a.download))
         );
 
-        progress.begin("Downloading libraries", lib_downloads.len());
+        let main_progress = progress.begin("Downloading libraries", lib_downloads.len());
 
-        for (i, (path, url)) in lib_downloads.iter().enumerate() {
-            progress.advance(i + 1);
-            self.download_library(path, url, |_| {}).await?;
+        for (i, (path, asset)) in lib_downloads.iter().enumerate() {
+            let file_progress = progress.begin(*path, asset.size as usize);
+            self.download_library(path, &asset.url, |x| file_progress.advance(x)).await?;
+
+            main_progress.advance(i + 1);
         }
-
-        progress.end();
 
         Ok(())
     }
 
     pub async fn download_loader_libraries(&self,
         forge_manifest: &ForgeManifest,
-        progress: &dyn Progress
+        progress: &impl BeginProgress
     ) -> Result<()> {
         let mut downloads: Vec<&ForgeLibrary> = vec![];
 
@@ -209,24 +209,24 @@ impl AssetManager {
             }
         }
 
-        progress.begin("Downloading mod loader libraries", downloads.len());
+        let main_progress = progress.begin("Downloading mod loader libraries", downloads.len());
 
-        let downloads = downloads.iter()
-            .map(|lib| (lib.asset_path(), lib.download_url()));
+        for (i, lib) in downloads.iter().enumerate() {
+            let path = lib.asset_path();
+            let url = lib.download_url();
 
-        for (i, (path, url)) in downloads.enumerate() {
-            progress.advance(i + 1);
-            self.download_library(&path, &url, |_| {}).await?;
+            let file_progress = progress.begin(lib.name(), lib.size());
+            self.download_library(&path, &url, |x| file_progress.advance(x)).await?;
+
+            main_progress.advance(i + 1);
         }
-
-        progress.end();
 
         Ok(())
     }
 
     pub async fn download_installer_jar(&self,
         mod_loader: &ModLoader,
-        progress: &dyn Progress
+        progress: &impl BeginProgress
     ) -> Result<PathBuf> {
         let manifest = self.get_loader_manifest(mod_loader).await?;
 
@@ -236,7 +236,7 @@ impl AssetManager {
         let installer = manifest.dist.get_installer_lib()
             .ok_or(Error::UnhandledModLoaderInstaller(mod_loader.to_string()))?;
 
-        progress.begin("Downloading mod loader installer", installer.size());
+        let progress = progress.begin("Downloading mod loader installer", installer.size());
 
         let installer_path = installer.asset_path();
         self.download_library(
@@ -245,27 +245,23 @@ impl AssetManager {
             |x| progress.advance(x)
         ).await?;
 
-        progress.end();
-
         return Ok(self.libs_dir.join(installer_path));
     }
 
     pub async fn download_server_jar(&self,
         mc_version: &str,
         path: &Path,
-        progress: &dyn Progress
+        progress: &impl BeginProgress
     ) -> Result<()> {
         let manifest = self.get_game_manifest(mc_version).await?;
 
         let server = manifest.downloads.server
             .ok_or(Error::MinecraftServerNotFound(mc_version.to_string()))?;
 
-        progress.begin("Downloading server jar", server.size as usize);
+        let progress = progress.begin("Downloading server jar", server.size as usize);
 
         self.client.download_file(&server.url, path, |x| progress.advance(x))
             .await?;
-
-        progress.end();
 
         Ok(())
     }
@@ -288,9 +284,9 @@ impl AssetManager {
     pub fn copy_resources(&self,
         asset_manifest: &AssetManifest,
         target_dir: &Path,
-        progress: &dyn Progress
+        progress: &impl BeginProgress
     ) -> Result<()> {
-        progress.begin("Copy resources", asset_manifest.objects.len());
+        let progress = progress.begin("Copy resources", asset_manifest.objects.len());
 
         for (i, (path, obj)) in asset_manifest.objects.iter().enumerate() {
             let object_path = self.objects_dir()
@@ -307,15 +303,13 @@ impl AssetManager {
             progress.advance(i + 1);
         }
 
-        progress.end();
-
         Ok(())
     }
 
     pub fn extract_natives(self,
         game_manifest: &GameManifest,
         target_dir: &Path,
-        progress: &dyn Progress
+        progress: &impl BeginProgress
     ) -> Result<()> {
         let native_libs: Vec<_> = game_manifest.libraries.iter()
             .filter(|lib| lib.has_rules_match())
@@ -323,15 +317,13 @@ impl AssetManager {
             .filter_map(|lib| lib.natives_artifact().unwrap())
             .collect();
 
-        progress.begin("Extracting native jars", native_libs.len());
+        let progress = progress.begin("Extracting native jars", native_libs.len());
 
         for (i, lib) in native_libs.iter().enumerate() {
             let lib_file = self.libs_dir.join(&lib.path);
             zip::extract_zip(fs::File::open(lib_file)?, target_dir)?;
             progress.advance(i + 1);
         }
-
-        progress.end();
 
         Ok(())
     }

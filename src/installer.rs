@@ -22,7 +22,7 @@ use anyhow::{bail, Result};
 
 use crate::{
     json::{CurseForgeFile, CurseForgeMod, ModpackVersionManifest},
-    AssetClient, CurseForgeZip, Error, Progress
+    AssetClient, BeginProgress, CurseForgeZip, Error
 };
 
 pub struct Installer {
@@ -71,7 +71,7 @@ impl Installer {
 
     pub async fn install_pack_zip(&self,
         pack: &CurseForgeZip,
-        progress: &dyn Progress
+        progress: &impl BeginProgress
     ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
         // copy pack overrides to minecraft dir
         pack.copy_game_data(&self.dest_dir)?;
@@ -91,7 +91,7 @@ impl Installer {
     pub async fn install_pack(&self,
         pack: &ModpackVersionManifest,
         is_server: bool,
-        progress: &dyn Progress
+        progress: &impl BeginProgress
     ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
         let pack_files: Vec<_> = if is_server {
             pack.files.iter()
@@ -108,10 +108,10 @@ impl Installer {
 
         let mut installed_files: Vec<PathBuf> = Vec::new();
 
-        progress.begin("Downloading assets...", assets.len());
+        let main_progress = progress.begin("Downloading assets...", assets.len());
 
         for (i, f) in assets.iter().enumerate() {
-            progress.advance(i + 1);
+            let file_progress = progress.begin(&f.name, f.size as usize);
 
             let file_url = f.url.as_ref().unwrap();
 
@@ -119,7 +119,7 @@ impl Installer {
             // which is the full curse zip file, download and extract overrides
             if f.file_type == "cf-extract" {
                 let dest_file_path = std::env::temp_dir().join(&f.name);
-                self.client.download_file(file_url, &dest_file_path, |_| {})
+                self.client.download_file(file_url, &dest_file_path, |x| file_progress.advance(x))
                     .await?;
 
                 let pack = CurseForgeZip::load_zip(&dest_file_path)?;
@@ -127,22 +127,22 @@ impl Installer {
 
                 let mut override_files = pack.list_overrides()?;
                 installed_files.append(&mut override_files);
+            } else {
+                let dest_file_path = self.dest_dir.join(&f.path).join(&f.name);
 
-                continue;
+                // save time/bandwidth and skip download if dest file exists
+                if !dest_file_path.exists() {
+                    self.client.download_file(&file_url, &dest_file_path, |x| file_progress.advance(x))
+                        .await?;
+                }
+
+                installed_files.push(dest_file_path);
             }
 
-            let dest_file_path = self.dest_dir.join(&f.path).join(&f.name);
-
-            // save time/bandwidth and skip download if dest file exists
-            if !dest_file_path.exists() {
-                self.client.download_file(&file_url, &dest_file_path, |_| {})
-                    .await?;
-            }
-
-            installed_files.push(dest_file_path);
+            main_progress.advance(i + 1);
         }
 
-        progress.end();
+        main_progress.end();
 
         let mods: Vec<_> = pack_files.iter()
             .filter_map(|f| f.curseforge.as_ref())
@@ -163,7 +163,7 @@ impl Installer {
         file_ids: Vec<u64>,
         project_ids: Vec<u64>,
         mut installed_files: Vec<PathBuf>,
-        progress: &dyn Progress
+        progress: &impl BeginProgress
     ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
         let mut file_list = self.client.get_curseforge_file_list(&file_ids).await?;
         let mut mod_list = self.client.get_curseforge_mods(&project_ids).await?;
@@ -188,13 +188,13 @@ impl Installer {
         let (downloads, blocked): (Vec<_>, Vec<_>) = file_downloads.clone().into_iter()
             .partition(|f| f.can_auto_download);
 
-        progress.begin("Downloading mods...", downloads.len());
+        let main_progress = progress.begin("Downloading mods...", downloads.len());
 
         // create mods dir in case there are zero automated downloads with one or more manual downloads
         fs::create_dir_all(self.mods_dir())?;
 
         for (i, f) in downloads.iter().enumerate() {
-            progress.advance(i + 1);
+            let file_progress = progress.begin(&f.file_name, f.file_size as usize);
 
             let dest_file_path = self.get_file_path(f);
 
@@ -203,10 +203,10 @@ impl Installer {
                 continue;
             }
 
-            self.client.download_file(&f.url, &dest_file_path, |_| {}).await?;
-        }
+            self.client.download_file(&f.url, &dest_file_path, |x| file_progress.advance(x)).await?;
 
-        progress.end();
+            main_progress.advance(i + 1);
+        }
 
         installed_files.extend(
             file_downloads.iter()
@@ -237,6 +237,7 @@ pub enum FileType {
 #[derive(Clone)]
 pub struct FileDownload {
     pub file_name: String,
+    pub file_size: u64,
     pub file_type: FileType,
     pub can_auto_download: bool,
     pub url: String
@@ -259,6 +260,7 @@ impl FileDownload {
 
         FileDownload {
             file_name: f.file_name.clone(),
+            file_size: f.file_size,
             file_type,
             can_auto_download: f.download_url.is_some(),
             url: match &f.download_url {

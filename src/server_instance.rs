@@ -24,7 +24,7 @@ use crate::{
     asset_manager::AssetManager,
     json::ServerInstanceManifest,
     launch_cmd::LaunchCommand,
-    Error, ModLoader, ModLoaderName, Progress
+    BeginProgress, Error, ModLoader, ModLoaderName
 };
 
 const MANIFEST_FILE: &str = "manifest.json";
@@ -66,7 +66,7 @@ impl ServerInstance {
         instance_dir: &Path,
         mc_version: &str,
         mod_loader: Option<ModLoader>,
-        progress: &dyn Progress
+        progress: &impl BeginProgress
     ) -> Result<Self> {
         // create directory to contain instance
         if !instance_dir.exists() {
