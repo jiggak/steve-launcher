@@ -144,8 +144,12 @@ impl BeginProgress for ProgressBars {
 }
 
 impl Progress for ProgressHandler {
-    fn advance(&self, current: usize) {
-        self.progress.set_position(current as u64);
+    fn set_position(&self, pos: usize) {
+        self.progress.set_position(pos as u64);
+    }
+
+    fn set_length(&self, len: usize) {
+        self.progress.set_length(len as u64);
     }
 
     fn end(&self) {

@@ -58,12 +58,27 @@ impl AssetClient {
         file_path: &Path,
         progress: impl Fn(usize)
     ) -> Result<()> {
+        self.download_file_with_length(url, file_path, |_| {}, progress).await
+    }
+
+    pub async fn download_file_with_length(&self,
+        url: &str,
+        file_path: &Path,
+        length_cb: impl Fn(usize),
+        progress: impl Fn(usize)
+    ) -> Result<()> {
         fs::create_dir_all(file_path.parent().unwrap())?;
 
-        let mut stream = self.client.get(url)
+        let response = self.client.get(url)
             .send().await?
-            .error_for_status()?
-            .bytes_stream();
+            .error_for_status()?;
+
+        let length = response.content_length();
+        if let Some(length) = length {
+            length_cb(length as usize)
+        }
+
+        let mut stream = response.bytes_stream();
 
         let mut file = File::create(file_path)?;
 

@@ -93,6 +93,7 @@ pub trait BeginProgress {
 }
 
 pub trait Progress {
-    fn advance(&self, current: usize);
+    fn set_position(&self, pos: usize);
+    fn set_length(&self, len: usize);
     fn end(&self);
 }

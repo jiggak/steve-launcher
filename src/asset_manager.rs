@@ -132,9 +132,9 @@ impl AssetManager {
 
         for (i, (f, obj)) in asset_manifest.objects.iter().enumerate() {
             let file_progress = progress.begin(f, obj.size as usize);
-            self.download_asset(&obj.hash, |x| file_progress.advance(x)).await?;
+            self.download_asset(&obj.hash, |x| file_progress.set_position(x)).await?;
 
-            main_progress.advance(i + 1);
+            main_progress.set_position(i + 1);
         }
 
         Ok(())
@@ -179,9 +179,9 @@ impl AssetManager {
 
         for (i, (path, asset)) in lib_downloads.iter().enumerate() {
             let file_progress = progress.begin(*path, asset.size as usize);
-            self.download_library(path, &asset.url, |x| file_progress.advance(x)).await?;
+            self.download_library(path, &asset.url, |x| file_progress.set_position(x)).await?;
 
-            main_progress.advance(i + 1);
+            main_progress.set_position(i + 1);
         }
 
         Ok(())
@@ -216,9 +216,9 @@ impl AssetManager {
             let url = lib.download_url();
 
             let file_progress = progress.begin(lib.name(), lib.size());
-            self.download_library(&path, &url, |x| file_progress.advance(x)).await?;
+            self.download_library(&path, &url, |x| file_progress.set_position(x)).await?;
 
-            main_progress.advance(i + 1);
+            main_progress.set_position(i + 1);
         }
 
         Ok(())
@@ -242,7 +242,7 @@ impl AssetManager {
         self.download_library(
             &installer_path,
             &installer.download_url(),
-            |x| progress.advance(x)
+            |x| progress.set_position(x)
         ).await?;
 
         return Ok(self.libs_dir.join(installer_path));
@@ -260,7 +260,7 @@ impl AssetManager {
 
         let progress = progress.begin("Downloading server jar", server.size as usize);
 
-        self.client.download_file(&server.url, path, |x| progress.advance(x))
+        self.client.download_file(&server.url, path, |x| progress.set_position(x))
             .await?;
 
         Ok(())
@@ -300,7 +300,7 @@ impl AssetManager {
                 fs::copy(object_path, resource_path)?;
             }
 
-            progress.advance(i + 1);
+            progress.set_position(i + 1);
         }
 
         Ok(())
@@ -322,7 +322,7 @@ impl AssetManager {
         for (i, lib) in native_libs.iter().enumerate() {
             let lib_file = self.libs_dir.join(&lib.path);
             zip::extract_zip(fs::File::open(lib_file)?, target_dir)?;
-            progress.advance(i + 1);
+            progress.set_position(i + 1);
         }
 
         Ok(())

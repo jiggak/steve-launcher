@@ -81,7 +81,7 @@ pub async fn search_modpacks(search: &str, limit: u8) -> Result<ModpackVersionMa
         );
 
         count += 1;
-        progress.advance(count);
+        progress.set_position(count);
     }
 
     for curse_id in results.curseforge_ids {
@@ -90,7 +90,7 @@ pub async fn search_modpacks(search: &str, limit: u8) -> Result<ModpackVersionMa
         );
 
         count += 1;
-        progress.advance(count);
+        progress.set_position(count);
     }
 
     progress.end();

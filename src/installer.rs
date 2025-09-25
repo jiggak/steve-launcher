@@ -119,8 +119,15 @@ impl Installer {
             // which is the full curse zip file, download and extract overrides
             if f.file_type == "cf-extract" {
                 let dest_file_path = std::env::temp_dir().join(&f.name);
-                self.client.download_file(file_url, &dest_file_path, |x| file_progress.advance(x))
-                    .await?;
+
+                // override.zip size is often -1
+                // use content-length to get accurate file size for progress
+                self.client.download_file_with_length(
+                    file_url,
+                    &dest_file_path,
+                    |x| file_progress.set_length(x),
+                    |x| file_progress.set_position(x)
+                ).await?;
 
                 let pack = CurseForgeZip::load_zip(&dest_file_path)?;
                 pack.copy_game_data(&self.dest_dir)?;
@@ -132,14 +139,14 @@ impl Installer {
 
                 // save time/bandwidth and skip download if dest file exists
                 if !dest_file_path.exists() {
-                    self.client.download_file(&file_url, &dest_file_path, |x| file_progress.advance(x))
+                    self.client.download_file(&file_url, &dest_file_path, |x| file_progress.set_position(x))
                         .await?;
                 }
 
                 installed_files.push(dest_file_path);
             }
 
-            main_progress.advance(i + 1);
+            main_progress.set_position(i + 1);
         }
 
         main_progress.end();
@@ -203,9 +210,9 @@ impl Installer {
                 continue;
             }
 
-            self.client.download_file(&f.url, &dest_file_path, |x| file_progress.advance(x)).await?;
+            self.client.download_file(&f.url, &dest_file_path, |x| file_progress.set_position(x)).await?;
 
-            main_progress.advance(i + 1);
+            main_progress.set_position(i + 1);
         }
 
         installed_files.extend(
