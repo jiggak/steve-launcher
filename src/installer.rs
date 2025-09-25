@@ -139,8 +139,11 @@ impl Installer {
 
                 // save time/bandwidth and skip download if dest file exists
                 if !dest_file_path.exists() {
-                    self.client.download_file(&file_url, &dest_file_path, |x| file_progress.set_position(x))
-                        .await?;
+                    self.client.download_file(
+                        &file_url,
+                        &dest_file_path,
+                        |x| file_progress.set_position(x)
+                    ).await?;
                 }
 
                 installed_files.push(dest_file_path);
@@ -210,7 +213,11 @@ impl Installer {
                 continue;
             }
 
-            self.client.download_file(&f.url, &dest_file_path, |x| file_progress.set_position(x)).await?;
+            self.client.download_file(
+                &f.url,
+                &dest_file_path,
+                |x| file_progress.set_position(x)
+            ).await?;
 
             main_progress.set_position(i + 1);
         }
