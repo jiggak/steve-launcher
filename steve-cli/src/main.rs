@@ -19,7 +19,7 @@
 mod cli;
 mod cmds;
 
-use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
 use std::{env as stdenv, io, path::{Path, PathBuf}};
 
 use cmds::{
@@ -28,7 +28,7 @@ use cmds::{
     server_launch, server_modpack_ftb, server_modpack_search, server_new
 };
 use cli::{AuthCommands, Parser, Cli, Commands, ServerCommands, ServerModpackArgs};
-use steve::{env, Progress};
+use steve::{env, BeginProgress, Progress};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
@@ -102,38 +102,63 @@ fn absolute_path(path: &Path) -> io::Result<PathBuf> {
     })
 }
 
+struct ProgressBars {
+    progress_bars: MultiProgress
+}
+
 struct ProgressHandler {
     progress: ProgressBar
 }
 
-impl ProgressHandler {
+impl ProgressBars {
     fn new() -> Self {
+        let progress_bars = MultiProgress::with_draw_target(
+            ProgressDrawTarget::stdout()
+        );
+
+        Self { progress_bars }
+    }
+}
+
+impl BeginProgress for ProgressBars {
+    fn begin<S: Into<String>>(&self, message: S, length: usize) -> Box<dyn Progress> {
         let style = ProgressStyle::with_template(
             // "{bar:40.cyan/blue} {msg} {pos}/{len}"
             "{bar:40.cyan/blue} {msg} {percent}% [{pos}/{len}]"
         ).unwrap();
 
-        let progress = ProgressBar::with_draw_target(None, ProgressDrawTarget::stdout())
-            .with_style(style);
+        let progress = ProgressBar::with_draw_target(
+                Some(length as u64),
+                ProgressDrawTarget::stdout()
+            )
+            .with_style(style)
+            .with_message(message.into());
 
-        ProgressHandler {
-            progress
-        }
+        let progress = self.progress_bars.add(progress);
+
+        // causes progress bar to be displayed now
+        progress.set_position(0);
+
+        Box::new(ProgressHandler { progress })
     }
 }
 
 impl Progress for ProgressHandler {
-    fn advance(&self, current: usize) {
-        self.progress.set_position(current as u64);
+    fn set_position(&self, pos: usize) {
+        self.progress.set_position(pos as u64);
     }
 
-    fn begin(&self, message: &'static str, total: usize) {
-        self.progress.set_length(total as u64);
-        self.progress.set_message(message);
-        self.progress.reset();
+    fn set_length(&self, len: usize) {
+        self.progress.set_length(len as u64);
     }
 
     fn end(&self) {
+        self.progress.finish_and_clear();
+    }
+}
+
+impl Drop for ProgressHandler {
+    fn drop(&mut self) {
         self.progress.finish_and_clear();
     }
 }

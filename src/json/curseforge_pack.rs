@@ -98,6 +98,8 @@ pub struct CurseForgeFile {
     pub mod_id: u64,
     #[serde(rename(deserialize = "fileName"))]
     pub file_name: String,
+    #[serde(rename(deserialize = "fileLength"))]
+    pub file_size: u64,
     #[serde(rename(deserialize = "downloadUrl"))]
     pub download_url: Option<String>
 }

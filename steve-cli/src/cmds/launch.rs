@@ -19,11 +19,11 @@
 use anyhow::Result;
 use std::path::Path;
 
-use crate::ProgressHandler;
+use crate::ProgressBars;
 use steve::Instance;
 
 pub async fn launch_instance(instance_dir: &Path, detach: bool) -> Result<()> {
-    let progress = ProgressHandler::new();
+    let progress = ProgressBars::new();
 
     let instance = Instance::load(instance_dir)?;
     let mut result = instance.launch(&progress)

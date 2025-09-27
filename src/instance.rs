@@ -25,7 +25,7 @@ use crate::{
     env,
     json::{ForgeDistribution, InstanceManifest, ModLoader},
     launch_cmd::LaunchCommand,
-    Error, Progress
+    BeginProgress, Error
 };
 
 const MANIFEST_FILE: &str = "manifest.json";
@@ -148,7 +148,7 @@ impl Instance {
         self.dir.join("natives")
     }
 
-    pub async fn launch(&self, progress: &dyn Progress) -> Result<Child> {
+    pub async fn launch(&self, progress: &impl BeginProgress) -> Result<Child> {
         let account = Account::load_with_tokens().await?;
 
         let profile = account.fetch_profile().await?;
