@@ -37,8 +37,8 @@ pub struct VersionManifestEntry {
     pub compliance_level: u8
 }
 
-impl ToString for VersionManifestEntry {
-    fn to_string(&self) -> String {
-        self.id.to_owned()
+impl std::fmt::Display for VersionManifestEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.id)
     }
 }
