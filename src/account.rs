@@ -65,7 +65,7 @@ impl Account {
     }
 
     pub fn clear() -> Result<()> {
-        Ok(Self::keyring_entry()?.delete_password()?)
+        Ok(Self::keyring_entry()?.delete_credential()?)
     }
 
     pub async fn load_with_tokens() -> Result<Self> {
