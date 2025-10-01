@@ -22,15 +22,18 @@
 
 use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
+use oauth2::{
+    basic::BasicClient, basic::BasicErrorResponseType, basic::BasicTokenType,
+    AuthUrl, ClientId, DeviceAuthorizationUrl, EmptyExtraTokenFields,
+    EndpointNotSet, EndpointSet, RefreshToken, RevocationErrorResponseType,
+    StandardErrorResponse, Scope, StandardDeviceAuthorizationResponse,
+    StandardRevocableToken, StandardTokenResponse,
+    StandardTokenIntrospectionResponse, TokenResponse, TokenUrl
+};
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
 use std::collections::HashMap;
-use oauth2::{
-    AuthUrl, ClientId, DeviceAuthorizationUrl, RefreshToken, Scope, TokenResponse, TokenUrl,
-    StandardDeviceAuthorizationResponse, StandardTokenResponse, EmptyExtraTokenFields,
-    basic::BasicClient, basic::BasicTokenType, reqwest::async_http_client
-};
 
 use crate::{env, Error};
 use crate::json::{AccountManifest, MicrosoftToken, MinecraftToken, MinecraftProfile};
@@ -129,7 +132,20 @@ impl MicrosoftToken {
     }
 }
 
-fn oauth_client() -> Result<BasicClient> {
+type OAuthClient = oauth2::Client<
+    StandardErrorResponse<BasicErrorResponseType>,
+    StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>,
+    StandardTokenIntrospectionResponse<EmptyExtraTokenFields, BasicTokenType>,
+    StandardRevocableToken,
+    StandardErrorResponse<RevocationErrorResponseType>,
+    EndpointSet,
+    EndpointSet,
+    EndpointNotSet,
+    EndpointNotSet,
+    EndpointSet
+>;
+
+fn oauth_client() -> Result<OAuthClient> {
     let auth_url = AuthUrl::new(
         "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize".to_string()
     )?;
@@ -142,23 +158,25 @@ fn oauth_client() -> Result<BasicClient> {
         "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode".to_string(),
     )?;
 
-    Ok(BasicClient::new(
-        ClientId::new(env::get_msa_client_id().to_string()),
-        None,
-        auth_url,
-        Some(token_url)
-    )
-    .set_device_authorization_url(device_auth_url))
+    let client_id = ClientId::new(env::get_msa_client_id().to_string());
+
+    let client = BasicClient::new(client_id)
+        .set_auth_uri(auth_url)
+        .set_token_uri(token_url)
+        .set_device_authorization_url(device_auth_url);
+
+    Ok(client)
 }
 
 pub async fn access_token(callback: LoginCallback) -> Result<MicrosoftToken> {
     let oauth2_client = oauth_client()?;
+    let client = Client::new();
 
     let details: StandardDeviceAuthorizationResponse = oauth2_client
-        .exchange_device_code()?
+        .exchange_device_code()
         .add_scope(Scope::new("XboxLive.signin".to_string()))
         .add_scope(Scope::new("offline_access".to_string()))
-        .request_async(async_http_client)
+        .request_async(&client)
         .await?;
 
     callback(
@@ -168,7 +186,7 @@ pub async fn access_token(callback: LoginCallback) -> Result<MicrosoftToken> {
 
     let msa_token_result = oauth2_client
         .exchange_device_access_token(&details)
-        .request_async(async_http_client, sleep, None)
+        .request_async(&client, sleep, None)
         .await?;
 
     Ok(MicrosoftToken::from_token_response(msa_token_result)?)
@@ -180,10 +198,11 @@ async fn sleep(dur: std::time::Duration) {
 
 async fn refresh_token(refresh_token: &str) -> Result<MicrosoftToken> {
     let oauth2_client = oauth_client()?;
+    let client = Client::new();
 
     let msa_token_result = oauth2_client
         .exchange_refresh_token(&RefreshToken::new(refresh_token.into()))
-        .request_async(async_http_client)
+        .request_async(&client)
         .await?;
 
     Ok(MicrosoftToken::from_token_response(msa_token_result)?)
