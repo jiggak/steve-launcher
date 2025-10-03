@@ -276,12 +276,12 @@ impl ModLoaderVersion {
     }
 }
 
-impl ToString for ModLoaderVersion {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for ModLoaderVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.recommended {
-            format!("{ver} *", ver = self.version)
+            write!(f, "{ver} *", ver = self.version)
         } else {
-            self.version.to_string()
+            write!(f, "{}", self.version)
         }
     }
 }

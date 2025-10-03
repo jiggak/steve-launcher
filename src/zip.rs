@@ -1,6 +1,6 @@
 use std::{fs::{self, File}, io::{self, Result, Read, Seek, Write}, path::Path};
 use walkdir::{DirEntry, WalkDir};
-use zip::{result::ZipResult, write::FileOptions, ZipArchive, ZipWriter};
+use zip::{result::ZipResult, write::SimpleFileOptions, ZipArchive, ZipWriter};
 
 // extract/create adapted from examples here
 // https://github.com/zip-rs/zip/tree/21a20584bc9e05dfa4f3c5b0bc420a1389fae2c3/examples
@@ -31,7 +31,7 @@ pub fn extract_zip(zip_file: File, out_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn create_zip(zip_file: File, src_dir: &Path) -> Result<()> {
+fn create_zip(zip_file: File, src_dir: &Path) -> Result<()> {
     let walkdir = WalkDir::new(src_dir);
     let it = walkdir.into_iter();
 
@@ -44,12 +44,11 @@ fn zip_dir<T>(
     it: &mut dyn Iterator<Item = DirEntry>,
     src_dir: &Path,
     writer: T
-) -> zip::result::ZipResult<()>
-where
-    T: Write + Seek,
+) -> ZipResult<()>
+    where T: Write + Seek
 {
     let mut zip = ZipWriter::new(writer);
-    let options = FileOptions::default();
+    let options = SimpleFileOptions::default();
 
     let mut buffer = Vec::new();
     for entry in it {
@@ -59,7 +58,6 @@ where
         // Write file or directory explicitly
         // Some unzip tools unzip files with directory paths correctly, some do not!
         if path.is_file() {
-            #[allow(deprecated)]
             zip.start_file_from_path(name, options)?;
             let mut f = File::open(path)?;
 
@@ -69,11 +67,12 @@ where
         } else if !name.as_os_str().is_empty() {
             // Only if not root! Avoids path spec / warning
             // and mapname conversion failed error on unzip
-            #[allow(deprecated)]
             zip.add_directory_from_path(name, options)?;
         }
     }
+
     zip.finish()?;
+
     ZipResult::Ok(())
 }
 
