@@ -172,8 +172,8 @@ impl Installer {
     }
 
     async fn download_curseforge_files(&self,
-        file_ids: Vec<u64>,
-        project_ids: Vec<u64>,
+        file_ids: Vec<u32>,
+        project_ids: Vec<u32>,
         mut installed_files: Vec<PathBuf>,
         progress: &impl BeginProgress
     ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {

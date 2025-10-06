@@ -161,7 +161,7 @@ pub struct ModpackFile {
 #[derive(Deserialize)]
 pub struct ModpackFileCurseforge {
     #[serde(rename(deserialize = "project"))]
-    pub project_id: u64,
+    pub project_id: u32,
     #[serde(rename(deserialize = "file"))]
-    pub file_id: u64
+    pub file_id: u32
 }
