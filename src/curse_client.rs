@@ -18,13 +18,16 @@
 
 use anyhow::Result;
 use reqwest::{Client, Method, RequestBuilder};
-use serde_json::json;
+use serde_json::{json, Value};
+use url::form_urlencoded;
 
-use crate::{
-    api_client::ApiClient, env,
-    json::{CurseForgeFile, CurseForgeFingerprintMatches, CurseForgeMod, CurseForgeResponse}
+use crate::{api_client::ApiClient, env};
+use crate::json::{
+    CurseForgeFile, CurseForgeFingerprintMatches, CurseForgeMod,
+    CurseForgeResponse, CurseForgeResponseWithPaging, ModLoaderType
 };
 
+const MC_GAME_ID: u32 = 432;
 const CURSE_API_URL: &str = "https://api.curseforge.com/v1/";
 
 pub struct CurseClient {
@@ -67,7 +70,6 @@ impl CurseClient {
     }
 
     pub async fn get_fingerprints(&self, fingerprints: &Vec<u32>) -> Result<CurseForgeFingerprintMatches> {
-        const MC_GAME_ID: u32 = 432;
         let response: CurseForgeResponse<_> =
             self.post(
                 &format!("fingerprints/{MC_GAME_ID}"),
@@ -77,6 +79,37 @@ impl CurseClient {
 
         Ok(response.data)
     }
+
+    pub async fn search_mods(&self,
+        mc_version: &str,
+        mod_loader: ModLoaderType,
+        search: &str
+    ) -> Result<Vec<CurseForgeMod>> {
+        let params = json!({
+            "gameId": MC_GAME_ID,
+            "classId": "6", // "6" is "Mods" category
+            "gameVersion": mc_version,
+            "modLoaderType": mod_loader,
+            "searchFilter": search
+        });
+
+        let query = to_query_string(params);
+        let response: CurseForgeResponseWithPaging<_> =
+            self.get(&format!("mods/search?{query}"))
+            .await?;
+
+        Ok(response.data)
+    }
+}
+
+fn to_query_string(params: Value) -> String {
+    let params: Vec<_> = params.as_object().unwrap().iter()
+        .map(|(k, v)| (k, v.to_string()))
+        .collect();
+
+    form_urlencoded::Serializer::new(String::new())
+        .extend_pairs(params)
+        .finish()
 }
 
 impl ApiClient for CurseClient {

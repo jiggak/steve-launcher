@@ -17,7 +17,7 @@
  */
 
 use serde::Deserialize;
-use serde_repr::Deserialize_repr;
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::{Error, ModLoader};
 
@@ -91,6 +91,23 @@ pub struct CurseForgeResponse<T> {
 }
 
 #[derive(Deserialize)]
+pub struct CurseForgeResponseWithPaging<T> {
+    pub data: Vec<T>,
+    pub pagination: Pagination
+}
+
+#[derive(Deserialize)]
+pub struct Pagination {
+    pub index: u32,
+    #[serde(rename(deserialize = "pageSize"))]
+    pub page_size: u32,
+    #[serde(rename(deserialize = "resultCount"))]
+    pub result_count: u32,
+    #[serde(rename(deserialize = "totalCount"))]
+    pub total_count: u64
+}
+
+#[derive(Deserialize)]
 // https://docs.curseforge.com/#tocS_File
 pub struct CurseForgeFile {
     #[serde(rename(deserialize = "id"))]
@@ -107,10 +124,12 @@ pub struct CurseForgeFile {
     pub release_type: FileReleaseType,
     #[serde(rename(deserialize = "fileStatus"))]
     pub file_status: FileStatus,
+    pub hashes: Vec<FileHash>,
     #[serde(rename(deserialize = "fileLength"))]
     pub file_size: u64,
     #[serde(rename(deserialize = "downloadUrl"))]
     pub download_url: Option<String>,
+    pub dependencies: Vec<FileDependency>,
     #[serde(rename(deserialize = "fileFingerprint"))]
     pub file_fingerprint: u32
 }
@@ -152,14 +171,66 @@ pub enum FileStatus {
 }
 
 #[derive(Deserialize)]
+pub struct FileHash {
+    pub value: String,
+    pub algo: HashAlgo
+}
+
+#[derive(Deserialize_repr, PartialEq)]
+#[repr(u8)]
+pub enum HashAlgo {
+    Sha1 = 1,
+    Md5 = 2
+}
+
+#[derive(Deserialize)]
+pub struct FileDependency {
+    #[serde(rename(deserialize = "modId"))]
+    pub mod_id: u32,
+    #[serde(rename(deserialize = "relationType"))]
+    pub algo: FileRelationType
+}
+
+#[derive(Deserialize_repr, PartialEq)]
+#[repr(u8)]
+pub enum FileRelationType {
+    EmbeddedLibrary = 1,
+    OptionalDependency = 2,
+    RequiredDependency = 3,
+    Tool = 4,
+    Incompatible = 5,
+    Include = 6
+}
+
+#[derive(Serialize_repr, PartialEq)]
+#[repr(u8)]
+pub enum ModLoaderType {
+    Any = 0,
+    Forge = 1,
+    Cauldron = 2,
+    LiteLoader = 3,
+    Fabric = 4,
+    Quilt = 5,
+    NeoForge = 6
+}
+
+#[derive(Deserialize)]
 // https://docs.curseforge.com/#tocS_Mod
 pub struct CurseForgeMod {
     #[serde(rename(deserialize = "id"))]
     pub mod_id: u32,
     pub slug: String,
+    pub name: String,
     pub links: CurseForgeModLinks,
     #[serde(rename(deserialize = "classId"))]
-    pub class_id: u32
+    pub class_id: u32,
+    #[serde(rename(deserialize = "mainFileId"))]
+    pub main_file_id: u32,
+    #[serde(rename(deserialize = "latestFiles"))]
+    pub latest_files: u32,
+    #[serde(rename(deserialize = "allowModDistribution"))]
+    pub allow_mod_distribution: bool
+
 }
 
 #[derive(Deserialize)]
