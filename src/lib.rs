@@ -17,8 +17,10 @@
  */
 
 mod account;
+mod api_client;
 mod asset_client;
 mod asset_manager;
+mod curse_client;
 mod curseforge_zip;
 mod download_watcher;
 pub mod env;
@@ -26,6 +28,7 @@ mod fs;
 mod installer;
 mod instance;
 mod launch_cmd;
+mod modpacks_client;
 mod json;
 mod rules;
 mod server_instance;
@@ -34,6 +37,7 @@ mod zip;
 pub use {
     account::Account,
     asset_client::AssetClient,
+    curse_client::CurseClient,
     curseforge_zip::CurseForgeZip,
     download_watcher::DownloadWatcher,
     download_watcher::WatcherMessage,
@@ -45,6 +49,7 @@ pub use {
     json::ModpackManifest,
     json::ModpackVersion,
     json::ModpackVersionManifest,
+    modpacks_client::ModpacksClient,
     server_instance::ServerInstance
 };
 

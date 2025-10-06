@@ -27,9 +27,9 @@ use std::{
 
 use crate::ProgressBars;
 use steve::{
-    AssetClient, BeginProgress, CurseForgeZip, DownloadWatcher, FileDownload,
-    Installer, Instance, ModpackManifest, ModpackVersion, ModpackVersionManifest,
-    WatcherMessage
+    BeginProgress, CurseForgeZip, DownloadWatcher, FileDownload, Installer,
+    Instance, ModpackManifest, ModpackVersion, ModpackVersionManifest,
+    ModpacksClient, WatcherMessage
 };
 use super::{console_theme, prompt_confirm};
 
@@ -66,7 +66,7 @@ pub async fn modpack_search_and_install(
 
 pub async fn search_modpacks(search: &str, limit: u8) -> Result<ModpackVersionManifest> {
     let progress = ProgressBars::new();
-    let client = AssetClient::new();
+    let client = ModpacksClient::new();
 
     let results = client.search_modpacks(search, limit).await?;
 
@@ -120,7 +120,7 @@ pub async fn search_modpacks(search: &str, limit: u8) -> Result<ModpackVersionMa
 }
 
 pub async fn get_ftb_pack(pack_id: u32) -> Result<ModpackVersionManifest> {
-    let client = AssetClient::new();
+    let client = ModpacksClient::new();
 
     let manifest = client.get_ftb_modpack_versions(pack_id).await?;
 

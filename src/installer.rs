@@ -22,19 +22,21 @@ use anyhow::{bail, Result};
 
 use crate::{
     json::{CurseForgeFile, CurseForgeMod, ModpackVersionManifest},
-    AssetClient, BeginProgress, CurseForgeZip, Error
+    AssetClient, BeginProgress, CurseClient, CurseForgeZip, Error
 };
 
 pub struct Installer {
     dest_dir: PathBuf,
-    client: AssetClient
+    asset_client: AssetClient,
+    curse_client: CurseClient
 }
 
 impl Installer {
     pub fn new(dest_dir: &Path) -> Self {
         Self {
             dest_dir: dest_dir.into(),
-            client: AssetClient::new()
+            asset_client: AssetClient::new(),
+            curse_client: CurseClient::new()
         }
     }
 
@@ -122,7 +124,7 @@ impl Installer {
 
                 // override.zip size is often -1
                 // use content-length to get accurate file size for progress
-                self.client.download_file_with_length(
+                self.asset_client.download_file_with_length(
                     file_url,
                     &dest_file_path,
                     |x| file_progress.set_length(x),
@@ -139,7 +141,7 @@ impl Installer {
 
                 // save time/bandwidth and skip download if dest file exists
                 if !dest_file_path.exists() {
-                    self.client.download_file(
+                    self.asset_client.download_file(
                         &file_url,
                         &dest_file_path,
                         |x| file_progress.set_position(x)
@@ -175,8 +177,8 @@ impl Installer {
         mut installed_files: Vec<PathBuf>,
         progress: &impl BeginProgress
     ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
-        let mut file_list = self.client.get_curseforge_file_list(&file_ids).await?;
-        let mut mod_list = self.client.get_curseforge_mods(&project_ids).await?;
+        let mut file_list = self.curse_client.get_curseforge_file_list(&file_ids).await?;
+        let mut mod_list = self.curse_client.get_curseforge_mods(&project_ids).await?;
 
         if file_list.len() != mod_list.len() {
             bail!(Error::CurseFileListMismatch {
@@ -213,7 +215,7 @@ impl Installer {
                 continue;
             }
 
-            self.client.download_file(
+            self.asset_client.download_file(
                 &f.url,
                 &dest_file_path,
                 |x| file_progress.set_position(x)
