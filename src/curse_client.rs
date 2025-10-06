@@ -36,7 +36,7 @@ impl CurseClient {
         Self { client: Client::new() }
     }
 
-    pub async fn get_curseforge_file_list(&self, file_ids: &Vec<u32>) -> Result<Vec<CurseForgeFile>> {
+    pub async fn get_files(&self, file_ids: &Vec<u32>) -> Result<Vec<CurseForgeFile>> {
         // avoid 400 bad request
         if file_ids.len() == 0 {
             return Ok(Vec::new())
@@ -53,7 +53,7 @@ impl CurseClient {
         Ok(data)
     }
 
-    pub async fn get_curseforge_mods(&self, mod_ids: &Vec<u32>) -> Result<Vec<CurseForgeMod>> {
+    pub async fn get_mods(&self, mod_ids: &Vec<u32>) -> Result<Vec<CurseForgeMod>> {
         // avoid 400 bad request
         if mod_ids.len() == 0 {
             return Ok(Vec::new())

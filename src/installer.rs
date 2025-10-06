@@ -177,8 +177,8 @@ impl Installer {
         mut installed_files: Vec<PathBuf>,
         progress: &impl BeginProgress
     ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
-        let mut file_list = self.curse_client.get_curseforge_file_list(&file_ids).await?;
-        let mut mod_list = self.curse_client.get_curseforge_mods(&project_ids).await?;
+        let mut file_list = self.curse_client.get_files(&file_ids).await?;
+        let mut mod_list = self.curse_client.get_mods(&project_ids).await?;
 
         if file_list.len() != mod_list.len() {
             bail!(Error::CurseFileListMismatch {
