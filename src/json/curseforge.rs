@@ -214,6 +214,23 @@ pub enum ModLoaderType {
     NeoForge = 6
 }
 
+#[derive(Serialize_repr, PartialEq)]
+#[repr(u8)]
+pub enum ModSearchSortField {
+    Featured = 1,
+    Popularity = 2,
+    LastUpdated = 3,
+    Name = 4,
+    Author = 5,
+    TotalDownloads = 6,
+    Category = 7,
+    GameVersion = 8,
+    EarlyAccess = 9,
+    FeaturedReleased = 10,
+    ReleasedDate = 11,
+    Rating = 12
+}
+
 #[derive(Deserialize)]
 // https://docs.curseforge.com/#tocS_Mod
 pub struct CurseForgeMod {

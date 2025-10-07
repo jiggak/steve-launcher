@@ -24,7 +24,8 @@ use url::form_urlencoded;
 use crate::{api_client::ApiClient, env};
 use crate::json::{
     CurseForgeFile, CurseForgeFingerprintMatches, CurseForgeMod,
-    CurseForgeResponse, CurseForgeResponseWithPaging, ModLoaderType
+    CurseForgeResponse, CurseForgeResponseWithPaging, ModLoaderType,
+    ModSearchSortField
 };
 
 const MC_GAME_ID: u32 = 432;
@@ -87,10 +88,12 @@ impl CurseClient {
     ) -> Result<Vec<CurseForgeMod>> {
         let params = json!({
             "gameId": MC_GAME_ID,
-            "classId": "6", // "6" is "Mods" category
+            "classId": 6, // "6" is "Mods" category
             "gameVersion": mc_version,
             "modLoaderType": mod_loader,
-            "searchFilter": search
+            "searchFilter": search,
+            "sortField": ModSearchSortField::Popularity,
+            "sortOrder": "desc"
         });
 
         let query = to_query_string(params);
