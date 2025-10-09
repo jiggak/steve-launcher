@@ -83,7 +83,7 @@ impl CurseClient {
 
     pub async fn search_mods(&self,
         mc_version: &str,
-        mod_loader: ModLoaderType,
+        mod_loader: &ModLoaderType,
         search: &str
     ) -> Result<Vec<CurseForgeMod>> {
         let params = json!({
@@ -97,6 +97,7 @@ impl CurseClient {
         });
 
         let query = to_query_string(params);
+
         let response: CurseForgeResponseWithPaging<_> =
             self.get(&format!("mods/search?{query}"))
             .await?;
@@ -107,7 +108,15 @@ impl CurseClient {
 
 fn to_query_string(params: Value) -> String {
     let params: Vec<_> = params.as_object().unwrap().iter()
-        .map(|(k, v)| (k, v.to_string()))
+        .map(|(k, v)| {
+            let v = if v.is_string() {
+                v.as_str().unwrap().to_string()
+            } else {
+                v.to_string()
+            };
+
+            (k, v)
+        })
         .collect();
 
     form_urlencoded::Serializer::new(String::new())

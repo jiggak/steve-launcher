@@ -19,7 +19,7 @@
 use serde::Deserialize;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use crate::{Error, ModLoader};
+use crate::{Error, ModLoader, ModLoaderName};
 
 #[derive(Deserialize)]
 pub struct CurseForgePack {
@@ -214,6 +214,15 @@ pub enum ModLoaderType {
     NeoForge = 6
 }
 
+impl From<ModLoaderName> for ModLoaderType {
+    fn from(value: ModLoaderName) -> Self {
+        match value {
+            ModLoaderName::Forge => ModLoaderType::Forge,
+            ModLoaderName::NeoForge => ModLoaderType::NeoForge
+        }
+    }
+}
+
 #[derive(Serialize_repr, PartialEq)]
 #[repr(u8)]
 pub enum ModSearchSortField {
@@ -239,12 +248,13 @@ pub struct CurseForgeMod {
     pub slug: String,
     pub name: String,
     pub links: CurseForgeModLinks,
+    pub summary: String,
     #[serde(rename(deserialize = "classId"))]
-    pub class_id: u32,
+    pub class_id: u32, // integer(int32)¦null <- from docs, is it "really" optional?
     #[serde(rename(deserialize = "mainFileId"))]
-    pub main_file_id: u32,
+    pub main_file_id:u32,
     #[serde(rename(deserialize = "latestFiles"))]
-    pub latest_files: u32,
+    pub latest_files: Vec<CurseForgeFile>,
     #[serde(rename(deserialize = "allowModDistribution"))]
     pub allow_mod_distribution: bool
 
