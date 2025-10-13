@@ -24,8 +24,8 @@ use crate::{
     json::{ModpackManifest, ModpackSearch, ModpackVersionManifest}
 };
 
-const MODPACKS_CH_URL: &str = "https://api.modpacks.ch/public";
-const FTB_PACK_API_URL: &str = "https://api.feed-the-beast.com/v1/modpacks/modpack";
+const MODPACKS_CH_URL: &str = "https://api.modpacks.ch/public/";
+const FTB_PACK_API_URL: &str = "https://api.feed-the-beast.com/v1/modpacks/modpack/";
 
 pub struct ModpacksClient {
     client: Client
