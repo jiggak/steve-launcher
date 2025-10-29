@@ -52,11 +52,16 @@ impl Installer {
         self.dest_dir.join("shaderpacks")
     }
 
+    fn data_pack_dir(&self) -> PathBuf {
+        self.dest_dir.join("config/openloader/data")
+    }
+
     fn get_file_type_dir(&self, file_type: &FileType) -> PathBuf {
         match file_type {
             FileType::Mod => self.mods_dir(),
             FileType::Resource => self.resource_pack_dir(),
-            FileType::Shaders => self.shader_pack_dir()
+            FileType::Shaders => self.shader_pack_dir(),
+            FileType::Datapack => self.data_pack_dir()
         }
     }
 
@@ -247,7 +252,8 @@ impl Installer {
 pub enum FileType {
     Mod,
     Resource,
-    Shaders
+    Shaders,
+    Datapack
 }
 
 #[derive(Clone)]
@@ -267,6 +273,7 @@ impl FileDownload {
             6 => FileType::Mod,
             12 => FileType::Resource,
             6552 => FileType::Shaders,
+            6945 => FileType::Datapack,
             x => panic!("Unimplemented curseforge class_id {x}")
         };
 
