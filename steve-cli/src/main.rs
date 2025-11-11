@@ -23,12 +23,14 @@ use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
 use std::{env as stdenv, io, path::{Path, PathBuf}};
 
 use cmds::{
-    clear_credentials, create_instance, launch_instance, msal_login,
+    clear_credentials, create_instance, launch_instance, msal_login, mods_status,
     modpack_search_and_install, modpack_zip_install, print_account_status,
     server_launch, server_modpack_ftb, server_modpack_search, server_new
 };
 use cli::{AuthCommands, Parser, Cli, Commands, ServerCommands, ServerModpackArgs};
 use steve::{env, BeginProgress, Progress};
+
+use crate::{cli::ModsCommands, cmds::install_mod};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
@@ -86,6 +88,17 @@ async fn main() -> anyhow::Result<()> {
                 ServerCommands::Launch => {
                     server_launch(&instance_dir).await
                 }
+            }
+        },
+        Commands::Mods { command } => {
+            if let Some(command) = command {
+                match command {
+                    ModsCommands::Add { search } => {
+                        install_mod(&instance_dir, &search).await
+                    }
+                }
+            } else {
+                mods_status(&instance_dir).await
             }
         },
         Commands::Completion => {

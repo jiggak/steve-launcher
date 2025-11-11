@@ -171,6 +171,21 @@ impl Installer {
         ).await
     }
 
+    pub async fn install_curseforge_file(&self,
+        mod_id: u32,
+        file_id: u32,
+        progress: &impl BeginProgress
+    ) -> Result<Option<Vec<FileDownload>>> {
+        let result = self.download_curseforge_files(
+            vec![file_id],
+            vec![mod_id],
+            vec![],
+            progress
+        ).await?;
+
+        Ok(result.1)
+    }
+
     async fn download_curseforge_files(&self,
         file_ids: Vec<u32>,
         project_ids: Vec<u32>,

@@ -199,7 +199,7 @@ pub async fn modpack_zip_install(
     Ok(())
 }
 
-fn download_blocked(installer: &Installer, downloads: Vec<FileDownload>) -> Result<()> {
+pub fn download_blocked(installer: &Installer, downloads: Vec<FileDownload>) -> Result<()> {
     let watcher = DownloadWatcher::new(
         downloads.iter()
             .map(|f| f.file_name.as_str())

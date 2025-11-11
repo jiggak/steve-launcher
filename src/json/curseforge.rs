@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::fmt::Display;
+
 use serde::Deserialize;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -129,9 +131,17 @@ pub struct CurseForgeFile {
     pub file_size: u64,
     #[serde(rename(deserialize = "downloadUrl"))]
     pub download_url: Option<String>,
+    #[serde(rename(deserialize = "gameVersions"))]
+    pub game_versions: Vec<String>,
     pub dependencies: Vec<FileDependency>,
     #[serde(rename(deserialize = "fileFingerprint"))]
     pub file_fingerprint: u32
+}
+
+impl Display for CurseForgeFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{} - {}", self.file_name, self.display_name))
+    }
 }
 
 #[derive(Deserialize_repr, PartialEq)]
@@ -257,7 +267,12 @@ pub struct CurseForgeMod {
     pub latest_files: Vec<CurseForgeFile>,
     #[serde(rename(deserialize = "allowModDistribution"))]
     pub allow_mod_distribution: bool
+}
 
+impl Display for CurseForgeMod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{}", self.name))
+    }
 }
 
 #[derive(Deserialize)]

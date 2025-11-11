@@ -87,6 +87,11 @@ pub enum Commands {
         command: ServerCommands
     },
 
+    Mods {
+        #[clap(subcommand)]
+        command: Option<ModsCommands>
+    },
+
     /// Output bash completion code
     ///
     /// eval "$(steve completion)"
@@ -130,4 +135,11 @@ pub struct ServerModpackArgs {
 
     /// Search term for modpack to install
     pub search_term: Option<String>
+}
+
+#[derive(Subcommand)]
+pub enum ModsCommands {
+    Add {
+        search: String
+    }
 }

@@ -21,6 +21,7 @@ mod api_client;
 mod asset_client;
 mod asset_manager;
 mod curse_client;
+mod curseforge_hash;
 mod curseforge_zip;
 mod download_watcher;
 pub mod env;
@@ -29,6 +30,7 @@ mod installer;
 mod instance;
 mod launch_cmd;
 mod modpacks_client;
+mod mods_manager;
 mod json;
 mod rules;
 mod server_instance;
@@ -50,6 +52,7 @@ pub use {
     json::ModpackVersion,
     json::ModpackVersionManifest,
     modpacks_client::ModpacksClient,
+    mods_manager::ModsManager,
     server_instance::ServerInstance
 };
 
@@ -90,7 +93,9 @@ pub enum Error {
     #[error("Invalid mod loader ID format '{0}'; expected [name]-[version]")]
     InvalidModLoaderId(String),
     #[error("Unhandled modloader installer download for {0}")]
-    UnhandledModLoaderInstaller(String)
+    UnhandledModLoaderInstaller(String),
+    #[error("Fingerprint {1} not found for file '{0}'")]
+    MissingFingerprint(String, u32)
 }
 
 pub trait BeginProgress {
