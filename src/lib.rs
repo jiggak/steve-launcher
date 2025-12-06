@@ -46,6 +46,8 @@ pub use {
     instance::Instance,
     json::ModLoader,
     json::ModLoaderName,
+    json::Modpack,
+    json::ModpackId,
     json::ModpackManifest,
     json::ModpackVersion,
     json::ModpackVersionManifest,

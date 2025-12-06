@@ -70,7 +70,7 @@ pub async fn server_modpack_ftb(instance_dir: &Path, pack_id: u32) -> Result<()>
         &progress
     ).await?;
 
-    install_pack(&instance.server_dir(), true, &pack).await?;
+    // install_pack(&instance.server_dir(), true, &pack).await?;
 
     Ok(())
 }
@@ -86,7 +86,7 @@ pub async fn server_modpack_search(instance_dir: &Path, search: &str) -> Result<
         &progress
     ).await?;
 
-    install_pack(&instance.server_dir(), true, &pack).await?;
+    // install_pack(&instance.server_dir(), true, &pack).await?;
 
     Ok(())
 }
