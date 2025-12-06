@@ -42,7 +42,9 @@ pub struct InstanceManifest {
     pub mod_loader: Option<ModLoader>,
 
     /// Optional path to alternate `minecraft.jar`, relative to instance manifest
-    pub custom_jar: Option<String>
+    pub custom_jar: Option<String>,
+
+    pub modpack: Option<Modpack>
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -100,4 +102,23 @@ impl ToString for ModLoader {
     fn to_string(&self) -> String {
         format!("{}-{}", self.name.to_string(), self.version)
     }
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum ModpackId {
+    CurseForge {
+        mod_id: u32,
+        version: String
+    },
+    CurseZip {
+        file_name: String
+    }
+    // Modrinth
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct Modpack {
+    pub id: ModpackId,
+    pub files: Vec<String>
 }
