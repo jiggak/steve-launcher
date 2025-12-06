@@ -20,7 +20,6 @@ mod auth;
 mod create;
 mod launch;
 mod modpack;
-mod mods;
 mod server;
 
 pub use {
@@ -31,8 +30,6 @@ pub use {
     launch::launch_instance,
     modpack::modpack_search_and_install,
     modpack::modpack_zip_install,
-    mods::install_mod,
-    mods::mods_status,
     server::server_new,
     server::server_modpack_ftb,
     server::server_modpack_search,
