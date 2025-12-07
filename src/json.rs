@@ -18,7 +18,7 @@
 
 mod account_manifest;
 mod asset_manifest;
-mod curseforge_pack;
+mod curseforge;
 mod forge_manifest;
 mod forge_version_manifest;
 mod game_manifest;
@@ -29,7 +29,7 @@ mod version_manifest;
 
 pub use account_manifest::*;
 pub use asset_manifest::*;
-pub use curseforge_pack::*;
+pub use curseforge::*;
 pub use forge_manifest::*;
 pub use forge_version_manifest::*;
 pub use game_manifest::*;

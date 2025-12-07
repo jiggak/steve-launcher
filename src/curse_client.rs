@@ -18,14 +18,17 @@
 
 use anyhow::Result;
 use reqwest::{Client, Method, RequestBuilder};
-use serde_json::json;
+use serde_json::{json, Value};
+use url::form_urlencoded;
 
-use crate::{
-    env,
-    api_client::ApiClient,
-    json::{CurseForgeFile, CurseForgeMod, CurseForgeResponse}
+use crate::{api_client::ApiClient, env};
+use crate::json::{
+    CurseForgeFile, CurseForgeFingerprintMatches, CurseForgeMod,
+    CurseForgeResponse, CurseForgeResponseWithPaging, ModLoaderType,
+    ModSearchSortField
 };
 
+const MC_GAME_ID: u32 = 432;
 const CURSE_API_URL: &str = "https://api.curseforge.com/v1/";
 
 pub struct CurseClient {
@@ -37,13 +40,13 @@ impl CurseClient {
         Self { client: Client::new() }
     }
 
-    pub async fn get_curseforge_file_list(&self, file_ids: &Vec<u64>) -> Result<Vec<CurseForgeFile>> {
+    pub async fn get_files(&self, file_ids: &Vec<u32>) -> Result<Vec<CurseForgeFile>> {
         // avoid 400 bad request
         if file_ids.len() == 0 {
             return Ok(Vec::new())
         }
 
-        let response: CurseForgeResponse<CurseForgeFile> =
+        let response: CurseForgeResponse<Vec<CurseForgeFile>> =
             self.post("mods/files", &json!({"fileIds": file_ids}))
             .await?;
 
@@ -54,7 +57,7 @@ impl CurseClient {
         Ok(data)
     }
 
-    pub async fn get_curseforge_mods(&self, mod_ids: &Vec<u64>) -> Result<Vec<CurseForgeMod>> {
+    pub async fn get_mods(&self, mod_ids: &Vec<u32>) -> Result<Vec<CurseForgeMod>> {
         // avoid 400 bad request
         if mod_ids.len() == 0 {
             return Ok(Vec::new())
@@ -66,6 +69,59 @@ impl CurseClient {
 
         Ok(response.data)
     }
+
+    pub async fn get_fingerprints(&self, fingerprints: &Vec<u32>) -> Result<CurseForgeFingerprintMatches> {
+        let response: CurseForgeResponse<_> =
+            self.post(
+                &format!("fingerprints/{MC_GAME_ID}"),
+                &json!({"fingerprints": fingerprints})
+            )
+            .await?;
+
+        Ok(response.data)
+    }
+
+    pub async fn search_mods(&self,
+        mc_version: &str,
+        mod_loader: &ModLoaderType,
+        search: &str
+    ) -> Result<Vec<CurseForgeMod>> {
+        let params = json!({
+            "gameId": MC_GAME_ID,
+            "classId": 6, // "6" is "Mods" category
+            "gameVersion": mc_version,
+            "modLoaderType": mod_loader,
+            "searchFilter": search,
+            "sortField": ModSearchSortField::Popularity,
+            "sortOrder": "desc"
+        });
+
+        let query = to_query_string(params);
+
+        let response: CurseForgeResponseWithPaging<_> =
+            self.get(&format!("mods/search?{query}"))
+            .await?;
+
+        Ok(response.data)
+    }
+}
+
+fn to_query_string(params: Value) -> String {
+    let params: Vec<_> = params.as_object().unwrap().iter()
+        .map(|(k, v)| {
+            let v = if v.is_string() {
+                v.as_str().unwrap().to_string()
+            } else {
+                v.to_string()
+            };
+
+            (k, v)
+        })
+        .collect();
+
+    form_urlencoded::Serializer::new(String::new())
+        .extend_pairs(params)
+        .finish()
 }
 
 impl ApiClient for CurseClient {
