@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use console::Term;
 use dialoguer::Select;
 use std::{
@@ -219,6 +219,39 @@ pub async fn modpack_zip_install(
             files: pack_files
          }
     )?;
+
+    Ok(())
+}
+
+pub async fn modpack_update(instance_dir: &Path) -> Result<()> {
+    let mut instance = Instance::load(instance_dir)?;
+
+    if let Some(modpack) = &instance.manifest.modpack {
+        if let ModpackId::CurseForge { mod_id, version } = &modpack.id {
+            let client = ModpacksClient::new();
+
+            let pack_id = *mod_id;
+            let pack = client.get_curse_modpack_versions(pack_id)
+                .await?;
+
+            // hopefully it's safe to assume first version is latests
+            let latest = pack.versions.first()
+                .ok_or(anyhow!("Pack data has empty `versions` list"))?;
+
+            println!("Current: {version}");
+            println!("Latest: {}", latest.name);
+
+            if prompt_confirm("Would you like to (re)install latest version?")? {
+                let pack = client.get_curse_modpack(pack_id, latest.version_id)
+                    .await?;
+
+                install_pack(&mut instance, false, &pack)
+                    .await?;
+            }
+        } else {
+            println!("Only CurseForge instances can be updates automatically");
+        }
+    }
 
     Ok(())
 }
