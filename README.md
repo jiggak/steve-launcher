@@ -9,7 +9,7 @@ in the system keyring.
 
     steve auth
 
-Use the auth status command check credentials are save, and show some basic
+Use the auth status command check credentials are saved, and show some basic
 information about the stored tokens.
 
     steve auth status
@@ -21,30 +21,42 @@ Delete the stored credentials from system keyring.
 Create a new instance. If you omit the Minecraft version argument, `steve` will
 prompt you to select the version from a list.
 
-    steve create vanilla 1.20.1
+    steve create -i ./Vanilla 1.20.1
 
 To add a mod loader to the instance, pass the `--loader` option with the name
 of the mod loader (`forge` or `neoforge`). Pass the specific version, or don't
 and `steve` will prompt to select a version that matches the Minecraft version.
 
-    steve create my_modpack 1.20.1 --loader forge-47.3.7
+    steve create -i ./MyModpack 1.20.1 --loader forge-47.3.7
     # prompt forge version when version not specified
-    steve create my_modpack 1.20.1 --loader forge
+    steve create -i ./MyModpack 1.20.1 --loader forge
 
 Launch the new instance.
 
-    steve launch vanilla
+    steve launch -i ./Vanilla
 
-Search for modpacks with "atm9" in the name and install to the path "Minecraft/ATM9".
+Search for modpacks with "atm10" in the name and install to the path "./ATM10".
 Modpack search supports FTB and CurseForge.
 
-    steve modpack Minecraft/ATM9 atm9
+> FTB seems to be distributing modpacks on CurseForge these days. The
 
-Do you download a modpack ZIP file from CurseForge?
+    steve modpack -i ./ATM10 atm10
 
-    steve import Minecraft/ATM9 "~/Downloads/All+the+Mods+9-0.1.4.zip"
+Did you download a modpack ZIP file from CurseForge?
 
-# About Modpack Updating
+    steve import -i ~/ATM9 "~/Downloads/All+the+Mods+9-0.1.4.zip"
+
+# Instance Directory
+
+Steve will use the current directory to create or launch an instance.
+To specifiy the instance directory, use the `-i` parameter on any command
+that operates on an instance.
+
+    steve launch              # Launch instance in current directory
+    steve launch -i ./        # Same as previous command
+    steve launch -i ~/Vanilla # Launch instance "$HOME/Vanilla" directory
+
+# Modpack Updating
 
 Specifying an existing instance directory when installing a modpack will replace
 any files in the pack distribution that match existing files, but leave all other
@@ -55,7 +67,7 @@ If the update adds new versions of mods, resource packs, or shader packs, `steve
 will prompt you to remove the old ones. For mods in particular this is important
 as duplicate versions will cause an error at launch.
 
-# About Shared Data
+# Shared Data
 
 All of the game assets and libraries `steve` downloads are stored in a directory
 shared with all instances. This directory is resolved in the order as follows:
