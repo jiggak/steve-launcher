@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::ModLoader;
+use crate::{ModLoader, Modpack};
 
 #[derive(Deserialize, Serialize)]
 pub struct ServerInstanceManifest {
@@ -39,5 +39,7 @@ pub struct ServerInstanceManifest {
     pub java_env: Option<HashMap<String, String>>,
 
     /// Optional mod loader
-    pub mod_loader: Option<ModLoader>
+    pub mod_loader: Option<ModLoader>,
+
+    pub modpack: Option<Modpack>
 }

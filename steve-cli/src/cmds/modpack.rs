@@ -28,7 +28,7 @@ use std::{
 use crate::ProgressBars;
 use steve::{
     BeginProgress, CurseForgeZip, DownloadWatcher, FileDownload, Installer,
-    Instance, Modpack, ModpackId, ModpackManifest, ModpackVersion,
+    InstallTarget, Instance, Modpack, ModpackId, ModpackManifest, ModpackVersion,
     ModpackVersionManifest, ModpacksClient, WatcherMessage
 };
 use super::{console_theme, prompt_confirm};
@@ -136,11 +136,11 @@ pub async fn get_ftb_pack(pack_id: u32) -> Result<ModpackVersionManifest> {
 }
 
 pub async fn install_pack(
-    instance: &mut Instance,
+    instance: &mut dyn InstallTarget,
     is_server: bool,
     pack: &ModpackVersionManifest
 ) -> Result<()> {
-    let dest_dir = instance.game_dir();
+    let dest_dir = instance.install_dir();
     let progress = ProgressBars::new();
     let installer = Installer::new(&dest_dir);
 
@@ -151,7 +151,11 @@ pub async fn install_pack(
         download_blocked(&installer, downloads)?;
     }
 
-    instance.remove_old_modpack_files(&pack_files)?;
+    if let Some(modpack) = &instance.get_modpack_manifest() {
+        let old_files = modpack.files_to_paths();
+
+        installer.clean_pack_files(&old_files, &pack_files)?;
+    }
 
     let pack_files: Vec<_> = pack_files.iter()
         .map(|f| f.to_string_lossy().to_string())
@@ -205,7 +209,11 @@ pub async fn modpack_zip_install(
         download_blocked(&installer, downloads)?;
     }
 
-    instance.remove_old_modpack_files(&pack_files)?;
+    if let Some(modpack) = &instance.manifest.modpack {
+        let old_files = modpack.files_to_paths();
+
+        installer.clean_pack_files(&old_files, &pack_files)?;
+    }
 
     let pack_files: Vec<_> = pack_files.iter()
         .map(|f| f.to_string_lossy().to_string())
@@ -234,7 +242,7 @@ pub async fn modpack_update(instance_dir: &Path) -> Result<()> {
             let pack = client.get_curse_modpack_versions(pack_id)
                 .await?;
 
-            // hopefully it's safe to assume first version is latests
+            // hopefully it's safe to assume first version is latest
             let latest = pack.versions.first()
                 .ok_or(anyhow!("Pack data has empty `versions` list"))?;
 

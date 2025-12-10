@@ -17,7 +17,7 @@
  */
 
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use crate::Error;
 
@@ -121,4 +121,12 @@ pub enum ModpackId {
 pub struct Modpack {
     pub id: ModpackId,
     pub files: Vec<String>
+}
+
+impl Modpack {
+    pub fn files_to_paths(&self) -> Vec<PathBuf> {
+        self.files.iter()
+            .map(|f| PathBuf::from(f))
+            .collect()
+    }
 }

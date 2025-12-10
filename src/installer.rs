@@ -21,14 +21,20 @@ use std::{fs, path::{Path, PathBuf}};
 use anyhow::{bail, Result};
 
 use crate::{
-    json::{CurseForgeFile, CurseForgeMod, ModpackVersionManifest},
-    AssetClient, BeginProgress, CurseClient, CurseForgeZip, Error
+    AssetClient, BeginProgress, CurseClient, CurseForgeZip, Error, Modpack,
+    json::{CurseForgeFile, CurseForgeMod, ModpackVersionManifest}
 };
 
 pub struct Installer {
     dest_dir: PathBuf,
     asset_client: AssetClient,
     curse_client: CurseClient
+}
+
+pub trait InstallTarget {
+    fn install_dir(&self) -> PathBuf;
+    fn get_modpack_manifest(&self) -> &Option<Modpack>;
+    fn set_modpack_manifest(&mut self, modpack: Modpack) -> Result<()>;
 }
 
 impl Installer {
@@ -254,6 +260,10 @@ impl Installer {
         } else {
             Ok((installed_files, None))
         }
+    }
+
+    pub fn clean_pack_files(&self, old_files: &Vec<PathBuf>, new_files: &Vec<PathBuf>) -> Result<()> {
+        Ok(crate::fs::remove_diff_files(&self.dest_dir, &old_files, &new_files)?)
     }
 }
 

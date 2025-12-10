@@ -20,7 +20,7 @@ use anyhow::{bail, Result};
 use std::{fs, path::{Path, PathBuf}, process::Child};
 
 use crate::{
-    BeginProgress, Error, account::Account,
+    BeginProgress, Error, InstallTarget, account::Account,
     asset_manager::{self, AssetManager, get_client_jar_path, make_forge_modded_jar},
     env, json::{ForgeDistribution, InstanceManifest, ModLoader, Modpack},
     launch_cmd::LaunchCommand
@@ -150,27 +150,6 @@ impl Instance {
 
     pub fn natives_dir(&self) -> PathBuf {
         self.dir.join("natives")
-    }
-
-    pub fn remove_old_modpack_files(&self, new_pack_files: &Vec<PathBuf>) -> Result<()> {
-        if let Some(modpack) = &self.manifest.modpack {
-            let game_dir = self.game_dir();
-
-            let old_pack_files: Vec<_> = modpack.files.iter()
-                .map(|f| PathBuf::from(f))
-                .collect();
-
-            // list old files not in list of new files and remove
-            let delete_files: Vec<_> = old_pack_files.iter()
-                .filter(|f| !new_pack_files.contains(f))
-                .collect();
-
-            for f in delete_files {
-                fs::remove_file(game_dir.join(f))?;
-            }
-        }
-
-        Ok(())
     }
 
     pub async fn launch(&self, progress: &impl BeginProgress) -> Result<Child> {
@@ -337,5 +316,20 @@ impl Instance {
         }
 
         Ok(cmd.spawn()?)
+    }
+}
+
+impl InstallTarget for Instance {
+    fn install_dir(&self) -> PathBuf {
+        self.game_dir()
+    }
+
+    fn get_modpack_manifest(&self) -> &Option<Modpack> {
+        &self.manifest.modpack
+    }
+
+    fn set_modpack_manifest(&mut self, modpack: Modpack) -> Result<()> {
+        self.manifest.modpack = Some(modpack);
+        self.write_manifest()
     }
 }
