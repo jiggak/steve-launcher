@@ -63,20 +63,32 @@ pub fn list_files_in_dir<P: AsRef<Path>>(dir: P) -> io::Result<Vec<PathBuf>> {
 }
 
 /// Remove files from `old_files` that are not in the list of `new_files`,
-/// relative to the `base_dir`.
+/// relative to the `base_dir`. Returns list of files not found.
 pub fn remove_diff_files(
     base_dir: &Path,
     old_files: &Vec<PathBuf>,
     new_files: &Vec<PathBuf>
-) -> io::Result<()> {
+) -> io::Result<Vec<PathBuf>> {
     // list old files not in list of new files and remove
     let delete_files: Vec<_> = old_files.iter()
         .filter(|f| !new_files.contains(f))
         .collect();
 
+    let mut not_found = Vec::new();
+
     for f in delete_files {
-        fs::remove_file(base_dir.join(f))?;
+        let file_path = base_dir.join(f);
+        match fs::remove_file(&file_path) {
+            Ok(_) => { }
+            Err(error) => {
+                if matches!(error.kind(), io::ErrorKind::NotFound) {
+                    not_found.push(file_path);
+                } else {
+                    return Err(error)
+                }
+            }
+        }
     }
 
-    Ok(())
+    Ok(not_found)
 }

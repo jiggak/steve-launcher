@@ -263,7 +263,13 @@ impl Installer {
     }
 
     pub fn clean_pack_files(&self, old_files: &Vec<PathBuf>, new_files: &Vec<PathBuf>) -> Result<()> {
-        Ok(crate::fs::remove_diff_files(&self.dest_dir, &old_files, &new_files)?)
+        let not_found = crate::fs::remove_diff_files(&self.dest_dir, &old_files, &new_files)?;
+        if !not_found.is_empty() {
+            for f in not_found {
+                println!("File from manifest {:?} not found during cleanup", f);
+            }
+        }
+        Ok(())
     }
 }
 
