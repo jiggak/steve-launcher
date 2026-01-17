@@ -17,7 +17,7 @@
  */
 
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use crate::Error;
 
@@ -42,7 +42,9 @@ pub struct InstanceManifest {
     pub mod_loader: Option<ModLoader>,
 
     /// Optional path to alternate `minecraft.jar`, relative to instance manifest
-    pub custom_jar: Option<String>
+    pub custom_jar: Option<String>,
+
+    pub modpack: Option<Modpack>
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -99,5 +101,32 @@ impl FromStr for ModLoader {
 impl ToString for ModLoader {
     fn to_string(&self) -> String {
         format!("{}-{}", self.name.to_string(), self.version)
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum ModpackId {
+    CurseForge {
+        mod_id: u32,
+        version: String
+    },
+    CurseZip {
+        file_name: String
+    }
+    // Modrinth
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct Modpack {
+    pub id: ModpackId,
+    pub files: Vec<String>
+}
+
+impl Modpack {
+    pub fn files_to_paths(&self) -> Vec<PathBuf> {
+        self.files.iter()
+            .map(|f| PathBuf::from(f))
+            .collect()
     }
 }

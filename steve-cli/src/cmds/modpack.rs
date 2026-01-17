@@ -16,11 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use console::Term;
-use dialoguer::{MultiSelect, Select};
+use dialoguer::Select;
 use std::{
-    fs, io::Result as IoResult, path::Path, process::{Command, Stdio},
+    io::Result as IoResult, path::Path, process::{Command, Stdio},
     sync::{Arc, atomic::{AtomicBool, Ordering}, mpsc::{self, Sender}},
     thread::{self, Scope}
 };
@@ -28,8 +28,8 @@ use std::{
 use crate::ProgressBars;
 use steve::{
     BeginProgress, CurseForgeZip, DownloadWatcher, FileDownload, Installer,
-    Instance, ModpackManifest, ModpackVersion, ModpackVersionManifest,
-    ModpacksClient, WatcherMessage
+    InstallTarget, Instance, Modpack, ModpackId, ModpackManifest, ModpackVersion,
+    ModpackVersionManifest, ModpacksClient, WatcherMessage
 };
 use super::{console_theme, prompt_confirm};
 
@@ -40,7 +40,7 @@ pub async fn modpack_search_and_install(
 ) -> Result<()> {
     let pack = search_modpacks(search, limit).await?;
 
-    let instance = if Instance::exists(instance_dir) {
+    let mut instance = if Instance::exists(instance_dir) {
         if !prompt_confirm("Instance already exists, are you sure you want to install the pack here?")? {
             return Ok(())
         }
@@ -59,7 +59,7 @@ pub async fn modpack_search_and_install(
         ).await?
     };
 
-    install_pack(&instance.game_dir(), false, &pack).await?;
+    install_pack(&mut instance, false, &pack).await?;
 
     Ok(())
 }
@@ -136,23 +136,40 @@ pub async fn get_ftb_pack(pack_id: u32) -> Result<ModpackVersionManifest> {
 }
 
 pub async fn install_pack(
-    dest_dir: &Path,
+    instance: &mut dyn InstallTarget,
     is_server: bool,
     pack: &ModpackVersionManifest
 ) -> Result<()> {
+    let dest_dir = instance.install_dir();
     let progress = ProgressBars::new();
-    let installer = Installer::new(dest_dir);
+    let installer = Installer::new(&dest_dir);
 
-    let (remove, downloads) = installer.install_pack(pack, is_server, &progress)
+    let (pack_files, downloads) = installer.install_pack(pack, is_server, &progress)
         .await?;
 
     if let Some(downloads) = downloads {
         download_blocked(&installer, downloads)?;
     }
 
-    if !remove.is_empty() {
-        remove_files_prompt(dest_dir, &remove)?;
+    if let Some(modpack) = &instance.get_modpack_manifest() {
+        let old_files = modpack.files_to_paths();
+
+        installer.clean_pack_files(&old_files, &pack_files)?;
     }
+
+    let pack_files: Vec<_> = pack_files.iter()
+        .map(|f| f.to_string_lossy().to_string())
+        .collect();
+
+    instance.set_modpack_manifest(
+        Modpack {
+            id: ModpackId::CurseForge {
+                mod_id: pack.pack_id,
+                version: pack.name.to_string()
+            },
+            files: pack_files
+        }
+    )?;
 
     Ok(())
 }
@@ -165,7 +182,7 @@ pub async fn modpack_zip_install(
 
     let pack = CurseForgeZip::load_zip(zip_file)?;
 
-    let instance = if Instance::exists(instance_dir) {
+    let mut instance = if Instance::exists(instance_dir) {
         if !prompt_confirm("Instance already exists, are you sure you want to install the pack here?")? {
             return Ok(())
         }
@@ -185,15 +202,63 @@ pub async fn modpack_zip_install(
     };
 
     let installer = Installer::new(&instance.game_dir());
-    let (remove, downloads) = installer.install_pack_zip(&pack, &progress)
+    let (pack_files, downloads) = installer.install_pack_zip(&pack, &progress)
         .await?;
 
     if let Some(downloads) = downloads {
         download_blocked(&installer, downloads)?;
     }
 
-    if !remove.is_empty() {
-        remove_files_prompt(instance_dir, &remove)?;
+    if let Some(modpack) = &instance.manifest.modpack {
+        let old_files = modpack.files_to_paths();
+
+        installer.clean_pack_files(&old_files, &pack_files)?;
+    }
+
+    let pack_files: Vec<_> = pack_files.iter()
+        .map(|f| f.to_string_lossy().to_string())
+        .collect();
+
+    instance.set_modpack_manifest(
+        Modpack {
+            id: ModpackId::CurseZip {
+                file_name: zip_file.file_name().unwrap().to_string_lossy().to_string()
+            },
+            files: pack_files
+         }
+    )?;
+
+    Ok(())
+}
+
+pub async fn modpack_update(instance_dir: &Path) -> Result<()> {
+    let mut instance = Instance::load(instance_dir)?;
+
+    if let Some(modpack) = &instance.manifest.modpack {
+        if let ModpackId::CurseForge { mod_id, version } = &modpack.id {
+            let client = ModpacksClient::new();
+
+            let pack_id = *mod_id;
+            let pack = client.get_curse_modpack_versions(pack_id)
+                .await?;
+
+            // hopefully it's safe to assume first version is latest
+            let latest = pack.versions.first()
+                .ok_or(anyhow!("Pack data has empty `versions` list"))?;
+
+            println!("Current: {version}");
+            println!("Latest: {}", latest.name);
+
+            if prompt_confirm("Would you like to (re)install latest version?")? {
+                let pack = client.get_curse_modpack(pack_id, latest.version_id)
+                    .await?;
+
+                install_pack(&mut instance, false, &pack)
+                    .await?;
+            }
+        } else {
+            println!("Only CurseForge instances can be updates automatically");
+        }
     }
 
     Ok(())
@@ -340,30 +405,4 @@ fn format_modpack_versions<'a, I>(items: I) -> Vec<String>
     where I: Iterator<Item = &'a ModpackVersion>
 {
     items.map(|v| v.name.clone()).collect()
-}
-
-fn remove_files_prompt<P, Q>(base: P, files: &[Q]) -> Result<()>
-    where P: AsRef<Path>, Q: AsRef<Path>
-{
-    let prompt = "Found the following extra files after pack install. \
-These should be removed, unless you added them manually. \
-Toggle files for removal and press enter to continue.";
-
-    let options: Vec<_> = files.iter()
-        .map(|p| p.as_ref().strip_prefix(&base).unwrap().to_string_lossy())
-        .collect();
-
-    let select = MultiSelect::with_theme(&console_theme())
-        .with_prompt(prompt)
-        .items(&options)
-        .defaults(&vec![true; files.len()])
-        .report(false)
-        .interact()
-        .unwrap();
-
-    for i in select {
-        fs::remove_file(files[i].as_ref())?;
-    }
-
-    Ok(())
 }

@@ -21,10 +21,9 @@ use std::{fs, path::{Path, PathBuf}, process::Child};
 use anyhow::{bail, Result};
 
 use crate::{
-    asset_manager::AssetManager,
-    json::ServerInstanceManifest,
-    launch_cmd::LaunchCommand,
-    BeginProgress, Error, ModLoader, ModLoaderName
+    BeginProgress, Error, InstallTarget, ModLoader, ModLoaderName,
+    asset_manager::AssetManager, json::ServerInstanceManifest,
+    launch_cmd::LaunchCommand
 };
 
 const MANIFEST_FILE: &str = "manifest.json";
@@ -81,7 +80,8 @@ impl ServerInstance {
                 java_path: None,
                 java_args: None,
                 java_env: None,
-                mod_loader
+                mod_loader,
+                modpack: None
             }
         )?;
 
@@ -162,5 +162,20 @@ impl ServerInstance {
         cmd.arg("nogui");
 
         Ok(cmd.spawn()?)
+    }
+}
+
+impl InstallTarget for ServerInstance {
+    fn install_dir(&self) -> PathBuf {
+        self.server_dir()
+    }
+
+    fn get_modpack_manifest(&self) -> &Option<crate::Modpack> {
+        &self.manifest.modpack
+    }
+
+    fn set_modpack_manifest(&mut self, modpack: crate::Modpack) -> Result<()> {
+        self.manifest.modpack = Some(modpack);
+        self.write_manifest()
     }
 }

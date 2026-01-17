@@ -20,12 +20,10 @@ use anyhow::{bail, Result};
 use std::{fs, path::{Path, PathBuf}, process::Child};
 
 use crate::{
-    account::Account,
-    asset_manager::{self, get_client_jar_path, make_forge_modded_jar, AssetManager},
-    env,
-    json::{ForgeDistribution, InstanceManifest, ModLoader},
-    launch_cmd::LaunchCommand,
-    BeginProgress, Error
+    BeginProgress, Error, InstallTarget, account::Account,
+    asset_manager::{self, AssetManager, get_client_jar_path, make_forge_modded_jar},
+    env, json::{ForgeDistribution, InstanceManifest, ModLoader, Modpack},
+    launch_cmd::LaunchCommand
 };
 
 const MANIFEST_FILE: &str = "manifest.json";
@@ -88,7 +86,8 @@ impl Instance {
                 java_args: None,
                 java_env: None,
                 mod_loader,
-                custom_jar: None
+                custom_jar: None,
+                modpack: None
             }
         )?;
 
@@ -117,6 +116,11 @@ impl Instance {
 
     pub fn set_mod_loader(&mut self, mod_loader: Option<ModLoader>) -> Result<()> {
         self.manifest.mod_loader = mod_loader;
+        self.write_manifest()
+    }
+
+    pub fn set_modpack_manifest(&mut self, modpack: Modpack) -> Result<()> {
+        self.manifest.modpack = Some(modpack);
         self.write_manifest()
     }
 
@@ -312,5 +316,20 @@ impl Instance {
         }
 
         Ok(cmd.spawn()?)
+    }
+}
+
+impl InstallTarget for Instance {
+    fn install_dir(&self) -> PathBuf {
+        self.game_dir()
+    }
+
+    fn get_modpack_manifest(&self) -> &Option<Modpack> {
+        &self.manifest.modpack
+    }
+
+    fn set_modpack_manifest(&mut self, modpack: Modpack) -> Result<()> {
+        self.manifest.modpack = Some(modpack);
+        self.write_manifest()
     }
 }

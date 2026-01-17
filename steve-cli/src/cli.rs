@@ -87,6 +87,8 @@ pub enum Commands {
         command: ServerCommands
     },
 
+    Update,
+
     /// Output bash completion code
     ///
     /// eval "$(steve completion)"

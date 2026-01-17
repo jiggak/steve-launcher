@@ -21,14 +21,20 @@ use std::{fs, path::{Path, PathBuf}};
 use anyhow::{bail, Result};
 
 use crate::{
-    json::{CurseForgeFile, CurseForgeMod, ModpackVersionManifest},
-    AssetClient, BeginProgress, CurseClient, CurseForgeZip, Error
+    AssetClient, BeginProgress, CurseClient, CurseForgeZip, Error, Modpack,
+    json::{CurseForgeFile, CurseForgeMod, ModpackVersionManifest}
 };
 
 pub struct Installer {
     dest_dir: PathBuf,
     asset_client: AssetClient,
     curse_client: CurseClient
+}
+
+pub trait InstallTarget {
+    fn install_dir(&self) -> PathBuf;
+    fn get_modpack_manifest(&self) -> &Option<Modpack>;
+    fn set_modpack_manifest(&mut self, modpack: Modpack) -> Result<()>;
 }
 
 impl Installer {
@@ -153,7 +159,7 @@ impl Installer {
                     ).await?;
                 }
 
-                installed_files.push(dest_file_path);
+                installed_files.push(PathBuf::from(&f.path).join(&f.name));
             }
 
             main_progress.set_position(i + 1);
@@ -246,20 +252,24 @@ impl Installer {
 
         installed_files.extend(
             file_downloads.iter()
-                .map(|f| self.get_file_path(f))
+                .map(|f| self.get_file_path(f).strip_prefix(&self.dest_dir).unwrap().to_path_buf())
         );
 
-        let delete_files = [
-            list_files_for_delete(&self.mods_dir(), &installed_files)?,
-            list_files_for_delete(&self.resource_pack_dir(), &installed_files)?,
-            list_files_for_delete(&self.shader_pack_dir(), &installed_files)?
-        ].concat();
-
         if !blocked.is_empty() {
-            Ok((delete_files, Some(blocked)))
+            Ok((installed_files, Some(blocked)))
         } else {
-            Ok((delete_files, None))
+            Ok((installed_files, None))
         }
+    }
+
+    pub fn clean_pack_files(&self, old_files: &Vec<PathBuf>, new_files: &Vec<PathBuf>) -> Result<()> {
+        let not_found = crate::fs::remove_diff_files(&self.dest_dir, &old_files, &new_files)?;
+        if !not_found.is_empty() {
+            for f in not_found {
+                println!("File from manifest {:?} not found during cleanup", f);
+            }
+        }
+        Ok(())
     }
 }
 
@@ -307,25 +317,4 @@ impl FileDownload {
             }
         }
     }
-}
-
-fn list_files_for_delete(dir: &Path, keep_files: &Vec<PathBuf>) -> Result<Vec<PathBuf>> {
-    let mut delete_files = Vec::new();
-
-    if dir.exists() {
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-
-            if !entry.file_type()?.is_file() {
-                continue;
-            }
-
-            let path = entry.path();
-            if !keep_files.contains(&path) {
-                delete_files.push(path);
-            }
-        }
-    }
-
-    Ok(delete_files)
 }

@@ -63,14 +63,14 @@ pub async fn server_modpack_ftb(instance_dir: &Path, pack_id: u32) -> Result<()>
     let pack = get_ftb_pack(pack_id).await?;
 
     let progress = ProgressBars::new();
-    let instance = ServerInstance::create(
+    let mut instance = ServerInstance::create(
         instance_dir,
         &pack.get_minecraft_version()?,
         pack.get_mod_loader()?,
         &progress
     ).await?;
 
-    install_pack(&instance.server_dir(), true, &pack).await?;
+    install_pack(&mut instance, true, &pack).await?;
 
     Ok(())
 }
@@ -79,14 +79,14 @@ pub async fn server_modpack_search(instance_dir: &Path, search: &str) -> Result<
     let pack = search_modpacks(search, 5).await?;
 
     let progress = ProgressBars::new();
-    let instance = ServerInstance::create(
+    let mut instance = ServerInstance::create(
         instance_dir,
         &pack.get_minecraft_version()?,
         pack.get_mod_loader()?,
         &progress
     ).await?;
 
-    install_pack(&instance.server_dir(), true, &pack).await?;
+    install_pack(&mut instance, true, &pack).await?;
 
     Ok(())
 }
