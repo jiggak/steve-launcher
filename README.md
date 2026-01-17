@@ -30,9 +30,9 @@ Currently, steve requires a few environment variables to build:
 > out keys for others to use (appart from feeling like the wrong thing to do)?
 
 You can put them in `.cargo/config.toml` for convenient discovery by cargo,
-or provide as variables in the `cargo build` command:
+or provide as variables before the `cargo` command:
 
-    MSA_CLIENT_ID=... CURSE_API_KEY=... cargo build
+    MSA_CLIENT_ID=... CURSE_API_KEY=... cargo ...
 
 Assuming you have `~/.local/bin` in your `PATH`, you can install the single
 `steve` binary with:
@@ -49,7 +49,7 @@ in the system keyring.
 
     steve auth
 
-Use the auth status command check credentials are saved, and show some basic
+Use the auth status command to check credentials are saved, and show some basic
 information about the stored tokens.
 
     steve auth status
@@ -115,6 +115,12 @@ shared with all instances. This directory is resolved in the order as follows:
 * `$STEVE_DATA_HOME`
 * `${XDG_DATA_HOME}/steve`
 * `${HOME}/.local/share/steve`
+
+If for example you wanted a single directory to contain all your instances,
+and the various files downloaded required to launch the instance, you could
+export the `STEVE_DATA_HOME` variable to a directory path beside your instances:
+
+    export STEVE_DATA_HOME=~/Minecraft/steve_data
 
 # Docker usage
 
