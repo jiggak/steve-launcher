@@ -121,6 +121,12 @@ shared with all instances. This directory is resolved in the order as follows:
 The docker image is intended to be used both interactively to create the server
 instance, as well as running the server (non-interactively).
 
+The commands below assume the image is built and tagged as "steve".
+
+    docker build -t steve . \
+        --build-arg MSA_CLIENT_ID="${MSA_CLIENT_ID}" \
+        --build-arg CURSE_API_KEY="${CURSE_API_KEY}"
+
 The `-v` parameter mounts a volume for the instance directory to a path on the
 host system so that instances outlive the container. The format of this paremter
 is "[LOCAL PATH]:[CONTAINER PATH]". The container path must be `/instance`,
