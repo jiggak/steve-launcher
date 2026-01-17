@@ -1,5 +1,45 @@
 A Minecraft launcher for the command line inspired by [Prism Launcher](https://prismlauncher.org/)
 
+# Key Features
+
+* Create, updates, and launches minecraft "instances"
+* An "instance" can be a directory anywhere you like
+* Search/install modpacks from CurseForge
+* Easily update modpack instances to the latest pack
+* Docker image for setting up and running a Minecraft server
+
+# Building / Installing
+
+Currently, steve requires a few environment variables to build:
+
+* `MSA_CLIENT_ID` - Microsoft MSA Client ID
+   * Requires registering an App in Azure portal
+* `CURSE_API_KEY` - CurseForge API Key
+   * Requires filling out a request form
+   * https://support.curseforge.com/en/support/solutions/articles/9000208346-about-the-curseforge-api-and-how-to-apply-for-a-key
+
+> I'm aware it's a bit of a bumber having these API keys be a barrier to building.
+> I'm a bit stuck on what to do about that. API keys are typically not something
+> you just give out to others, as they are tied to an account for these services.
+>
+> It "feels" crazy to give them out.
+>
+> BUT... if I wanted to distribute builds to users, that's exactly what I need
+> to do (since the keys are strings in the binary).
+> So if I'm giving out the keys in a binary, what's the difference with handing
+> out keys for others to use (appart from feeling like the wrong thing to do)?
+
+You can put them in `.cargo/config.toml` for convenient discovery by cargo,
+or provide as variables in the `cargo build` command:
+
+    MSA_CLIENT_ID=... CURSE_API_KEY=... cargo build
+
+Assuming you have `~/.local/bin` in your `PATH`, you can install the single
+`steve` binary with:
+
+    # Install to ~/.local/bin/steve
+    cargo install --path steve-cli --root ~/.local
+
 # Usage
 
 Authenticate with your Microsoft account. This only needs to be run once.
@@ -38,7 +78,8 @@ Launch the new instance.
 Search for modpacks with "atm10" in the name and install to the path "./ATM10".
 Modpack search supports FTB and CurseForge.
 
-> FTB seems to be distributing modpacks on CurseForge these days. The
+> FTB seems to be distributing modpacks on CurseForge these days. But some of
+> older packs are still only available from FTB.
 
     steve modpack -i ./ATM10 atm10
 
@@ -58,14 +99,12 @@ that operates on an instance.
 
 # Modpack Updating
 
-Specifying an existing instance directory when installing a modpack will replace
-any files in the pack distribution that match existing files, but leave all other
-instances files alone. This means it's possible to "update" an existing instance
-to the latest modpack version.
+When steve installs a modpack, it tracks the version of the pack and list of
+installed files. Using the list of previously installed files, steve can accurately
+remove files no longer included in the pack when installing a new version.
 
-If the update adds new versions of mods, resource packs, or shader packs, `steve`
-will prompt you to remove the old ones. For mods in particular this is important
-as duplicate versions will cause an error at launch.
+You can use the convenient `steve update` command to update to the latest version,
+or use `steve modpack` to search for the latest version to install.
 
 # Shared Data
 
@@ -76,3 +115,26 @@ shared with all instances. This directory is resolved in the order as follows:
 * `$STEVE_DATA_HOME`
 * `${XDG_DATA_HOME}/steve`
 * `${HOME}/.local/share/steve`
+
+# Docker usage
+
+The docker image is intended to be used both interactively to create the server
+instance, as well as running the server (non-interactively).
+
+The `-v` parameter mounts a volume for the instance directory to a path on the
+host system so that instances outlive the container. The format of this paremter
+is "[LOCAL PATH]:[CONTAINER PATH]". The container path must be `/instance`,
+but can be changed with the `-i` parameter in steve.
+
+Running the container interactively will leave behind stopped containers, but
+we can remove them with the `--rm` flag.
+
+    # Create new server instance with mod loader in "./my_mc_server"
+    # Copy your desired mods to "./my_mc_server/server/mods/"
+    docker run --rm -it -v my_mc_server:/instance steve server create --loader neoforge-21.1.206
+
+    # Search and install modpack to "./my_mc_server"
+    docker run --rm -it -v my_mc_server:/instance steve modpack --server /instance "skies"
+
+    # Launch your instance
+    docker run -d -v my_mc_server:/instance
