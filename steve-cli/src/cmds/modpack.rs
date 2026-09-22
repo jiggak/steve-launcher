@@ -151,6 +151,9 @@ pub async fn install_pack(
         download_blocked(&installer, downloads)?;
     }
 
+    instance.set_mc_version(pack.get_minecraft_version()?)?;
+    instance.set_mod_loader(pack.get_mod_loader()?)?;
+
     if let Some(modpack) = &instance.get_modpack_manifest() {
         let old_files = modpack.files_to_paths();
 

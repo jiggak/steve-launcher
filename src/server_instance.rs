@@ -178,4 +178,14 @@ impl InstallTarget for ServerInstance {
         self.manifest.modpack = Some(modpack);
         self.write_manifest()
     }
+
+    fn set_mc_version(&mut self, mc_version: String) -> Result<()> {
+        self.manifest.mc_version = mc_version;
+        self.write_manifest()
+    }
+
+    fn set_mod_loader(&mut self, mod_loader: Option<ModLoader>) -> Result<()> {
+        self.manifest.mod_loader = mod_loader;
+        self.write_manifest()
+    }
 }

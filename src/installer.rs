@@ -21,7 +21,7 @@ use std::{fs, path::{Path, PathBuf}};
 use anyhow::{bail, Result};
 
 use crate::{
-    AssetClient, BeginProgress, CurseClient, CurseForgeZip, Error, Modpack,
+    AssetClient, BeginProgress, CurseClient, CurseForgeZip, Error, ModLoader, Modpack,
     json::{CurseForgeFile, CurseForgeMod, ModpackVersionManifest}
 };
 
@@ -35,6 +35,8 @@ pub trait InstallTarget {
     fn install_dir(&self) -> PathBuf;
     fn get_modpack_manifest(&self) -> &Option<Modpack>;
     fn set_modpack_manifest(&mut self, modpack: Modpack) -> Result<()>;
+    fn set_mc_version(&mut self, mc_version: String) -> Result<()>;
+    fn set_mod_loader(&mut self, mod_loader: Option<ModLoader>) -> Result<()>;
 }
 
 impl Installer {

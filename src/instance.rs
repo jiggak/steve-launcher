@@ -332,4 +332,12 @@ impl InstallTarget for Instance {
         self.manifest.modpack = Some(modpack);
         self.write_manifest()
     }
+
+    fn set_mc_version(&mut self, mc_version: String) -> Result<()> {
+        Instance::set_mc_version(self, mc_version)
+    }
+
+    fn set_mod_loader(&mut self, mod_loader: Option<ModLoader>) -> Result<()> {
+        Instance::set_mod_loader(self, mod_loader)
+    }
 }
