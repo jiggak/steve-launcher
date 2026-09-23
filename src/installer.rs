@@ -173,8 +173,12 @@ impl Installer {
             .filter_map(|f| f.curseforge.as_ref())
             .collect();
 
-        let file_ids = mods.iter().map(|c| c.file_id).collect();
-        let project_ids = mods.iter().map(|c| c.project_id).collect();
+        let file_ids = mods.iter()
+            .map(|c| c.file_id.as_int())
+            .collect();
+        let project_ids = mods.iter()
+            .map(|c| c.project_id.as_int())
+            .collect();
 
         self.download_curseforge_files(
             file_ids,

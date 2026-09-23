@@ -107,7 +107,9 @@ pub struct ModpackVersionManifest {
     pub pack_id: u32,
     pub name: String,
     pub files: Vec<ModpackFile>,
-    pub specs: Option<ModpackVersionSpecs>,
+    // some point the `specs` field started to contain an empty string
+    // not using this field right now so removing/ignoring it
+    // pub specs: Option<ModpackVersionSpecs>,
     pub targets: Vec<ModpackVersionTarget>,
     #[serde(rename(deserialize = "type"))]
     pub release_type: String
@@ -143,7 +145,7 @@ pub struct ModpackFile {
     #[serde(rename(deserialize = "type"))]
     pub file_type: String,
     // `version` field could be either a number or string in json response
-    // not using this field right now so removing ignoring it
+    // not using this field right now so removing/ignoring it
     // #[serde(deserialize_with = "int_to_string")]
     // pub version: String,
     pub path: String,
@@ -159,9 +161,25 @@ pub struct ModpackFile {
 }
 
 #[derive(Deserialize)]
+pub enum CurseForgeID {
+    String(String),
+    Number(u32),
+}
+
+impl CurseForgeID {
+    pub fn as_int(&self) -> u32 {
+        match self {
+            CurseForgeID::Number(i) => *i,
+            CurseForgeID::String(s) =>
+                s.parse().expect(&format!("{s} to be number"))
+        }
+    }
+}
+
+#[derive(Deserialize)]
 pub struct ModpackFileCurseforge {
     #[serde(rename(deserialize = "project"))]
-    pub project_id: u32,
+    pub project_id: CurseForgeID,
     #[serde(rename(deserialize = "file"))]
-    pub file_id: u32
+    pub file_id: CurseForgeID
 }
