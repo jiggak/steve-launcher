@@ -208,12 +208,19 @@ impl ForgeArtifact {
         match &self.path {
             Some(path) => path.clone(),
             None => {
+                let path = url.path();
+
                 // strip "/maven/" from files.prismlauncher.org URL's
-                if url.path().starts_with("/maven/") {
-                    url.path().strip_prefix("/maven/").unwrap().to_string()
+                if path.starts_with("/maven/") {
+                    path.strip_prefix("/maven/").unwrap().to_string()
+
+                // strip "/release/" from https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.251/neoforge-21.1.251-installer.jar
+                } else if path.starts_with("/release/") {
+                    path.strip_prefix("/release/").unwrap().to_string()
+
                 // strip "/" from mavan.minecraftforge.net URL's
                 } else {
-                    url.path().strip_prefix('/').unwrap().to_string()
+                    path.strip_prefix('/').unwrap().to_string()
                 }
             }
         }
