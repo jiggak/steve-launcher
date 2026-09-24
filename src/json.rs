@@ -40,10 +40,27 @@ pub use version_manifest::*;
 
 use serde::{Deserialize, Deserializer};
 
-fn empty_string_is_none<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: Deserializer<'de>
+fn de_empty_string_is_none<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where D: Deserializer<'de>
 {
     let o: Option<String> = Option::deserialize(deserializer)?;
     Ok(o.filter(|s| !s.is_empty()))
+}
+
+fn de_string_or_number<'de, D>(deserializer: D) -> Result<u32, D::Error>
+    where D: Deserializer<'de>
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrNumber {
+        Number(u32),
+        String(String),
+    }
+
+    match StringOrNumber::deserialize(deserializer)? {
+        StringOrNumber::Number(num) => Ok(num),
+        StringOrNumber::String(s) => s
+            .parse::<u32>()
+            .map_err(serde::de::Error::custom),
+    }
 }

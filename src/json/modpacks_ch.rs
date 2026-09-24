@@ -18,7 +18,7 @@
 
 use serde::Deserialize;
 
-use super::{empty_string_is_none, ModLoader};
+use super::{de_empty_string_is_none, de_string_or_number, ModLoader};
 use crate::Error;
 
 // https://api.modpacks.ch/public/modpack/all
@@ -149,7 +149,7 @@ pub struct ModpackFile {
     // #[serde(deserialize_with = "int_to_string")]
     // pub version: String,
     pub path: String,
-    #[serde(deserialize_with = "empty_string_is_none")]
+    #[serde(deserialize_with = "de_empty_string_is_none")]
     pub url: Option<String>,
     pub sha1: String,
     pub size: i32,
@@ -161,25 +161,9 @@ pub struct ModpackFile {
 }
 
 #[derive(Deserialize)]
-pub enum CurseForgeID {
-    String(String),
-    Number(u32),
-}
-
-impl CurseForgeID {
-    pub fn as_int(&self) -> u32 {
-        match self {
-            CurseForgeID::Number(i) => *i,
-            CurseForgeID::String(s) =>
-                s.parse().expect(&format!("{s} to be number"))
-        }
-    }
-}
-
-#[derive(Deserialize)]
 pub struct ModpackFileCurseforge {
-    #[serde(rename(deserialize = "project"))]
-    pub project_id: CurseForgeID,
-    #[serde(rename(deserialize = "file"))]
-    pub file_id: CurseForgeID
+    #[serde(rename(deserialize = "project"), deserialize_with = "de_string_or_number")]
+    pub project_id: u32,
+    #[serde(rename(deserialize = "file"), deserialize_with = "de_string_or_number")]
+    pub file_id: u32
 }
