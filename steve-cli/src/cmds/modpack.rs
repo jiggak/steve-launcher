@@ -27,9 +27,9 @@ use std::{
 
 use crate::ProgressBars;
 use steve::{
-    BeginProgress, CurseForgeZip, DownloadWatcher, FileDownload, Installer,
+    BeginProgress, CurseForgeZip, FileDownload, Installer,
     InstallTarget, Instance, Modpack, ModpackId, ModpackManifest, ModpackVersion,
-    ModpackVersionManifest, ModpacksClient, WatcherMessage
+    ModpackVersionManifest, ModpacksClient, WatchList, WatcherMessage, watch_downloads
 };
 use super::{console_theme, prompt_confirm};
 
@@ -268,20 +268,20 @@ pub async fn modpack_update(instance_dir: &Path) -> Result<()> {
 }
 
 fn download_blocked(installer: &Installer, downloads: Vec<FileDownload>) -> Result<()> {
-    let watcher = DownloadWatcher::new(
+    let mut watch_list = WatchList::new(
         downloads.iter()
             .map(|f| f.file_name.as_str())
     );
 
     // copy any downloads already in watch dir
     for f in &downloads {
-        if watcher.is_file_complete(&f.file_name) {
-            let file_path = watcher.watch_dir.join(&f.file_name);
+        if watch_list.is_file_complete(&f.file_name) {
+            let file_path = watch_list.watch_dir.join(&f.file_name);
             installer.install_file(f, &file_path)?;
         }
     }
 
-    if watcher.is_all_complete() {
+    if watch_list.is_all_complete() {
         return Ok(());
     }
 
@@ -290,37 +290,40 @@ fn download_blocked(installer: &Installer, downloads: Vec<FileDownload>) -> Resu
 
     term.write_line("Files below must be downloaded manually. Press [o] to open all, [x] to quit.")?;
 
-    print_download_state(&term, &watcher, &downloads)?;
+    print_download_state(&term, &watch_list, &downloads)?;
 
     let (tx, rx) = mpsc::channel();
 
     thread::scope(|scope| -> Result<()> {
-        let watch_cancel = watcher.watch(scope, tx.clone())?;
+        let watcher = watch_downloads(tx.clone())?;
         let readkey_cancel = readkey_thread(scope, term.clone(), tx);
 
         while let Ok(msg) = rx.recv() {
             match msg {
                 WatcherMessage::FileComplete(file_path) => {
-                    let file_name = file_path.file_name().unwrap().to_string_lossy();
-                    let file = downloads.iter()
-                        .find(|d| d.file_name == file_name)
-                        .unwrap();
-                    installer.install_file(file, &file_path)?;
-                    print_download_state(&term, &watcher, &downloads)?;
-                },
-                WatcherMessage::AllComplete => {
-                    break;
+                    if watch_list.on_file_complete(&file_path) {
+                        let file_name = file_path.file_name().unwrap().to_string_lossy();
+                        let file = downloads.iter()
+                            .find(|d| d.file_name == file_name)
+                            .unwrap();
+                        installer.install_file(file, &file_path)?;
+                        print_download_state(&term, &watch_list, &downloads)?;
+
+                        if watch_list.is_all_complete() {
+                            break;
+                        }
+                    }
                 },
                 WatcherMessage::KeyPress(ch) => {
                     match ch {
                         'o' => {
-                            open_urls(
-                                downloads.iter()
-                                    .filter_map(|d| match watcher.is_file_complete(&d.file_name) {
-                                        false => Some(d.url.as_str()),
-                                        _ => None
-                                    })
-                            )?;
+                            let pending_downloads = downloads.iter()
+                                .filter_map(|d| match watch_list.is_file_complete(&d.file_name) {
+                                    false => Some(d.url.as_str()),
+                                    _ => None
+                                });
+
+                            open_urls(pending_downloads)?;
                         },
                         'x' => {
                             break;
@@ -328,13 +331,11 @@ fn download_blocked(installer: &Installer, downloads: Vec<FileDownload>) -> Resu
                         _ => { }
                     }
                 },
-                WatcherMessage::Error(_) => {
-                    break;
-                }
+                _ => { }
             }
         }
 
-        watch_cancel();
+        watcher.stop();
         readkey_cancel();
 
         term.clear_to_end_of_screen()?;
@@ -346,10 +347,11 @@ fn download_blocked(installer: &Installer, downloads: Vec<FileDownload>) -> Resu
     Ok(())
 }
 
-fn print_download_state(term: &Term, watcher: &DownloadWatcher, downloads: &Vec<FileDownload>) -> IoResult<()> {
+fn print_download_state(term: &Term, watch_list: &WatchList, downloads: &Vec<FileDownload>) -> IoResult<()> {
     for x in downloads {
-        let status = match watcher.is_file_complete(&x.file_name) {
-            true => "✅", false => "❌"
+        let status = match watch_list.is_file_complete(&x.file_name) {
+            true => "✅",
+            false => "❌"
         };
 
         term.write_line(

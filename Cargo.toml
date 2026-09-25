@@ -14,7 +14,7 @@ futures-time = "3.0.0"
 futures-util = "0.3.31"
 keyring = { version = "3.6.3", features = ["sync-secret-service"] }
 lenient_semver = { version = "0.4.2", features = ["semver"] }
-notify = "8.2.0"
+notify-debouncer-full = "0.7.0"
 oauth2 = "5.0.0"
 reqwest = { version = "0.12.23", features = ["json", "stream"] }
 semver = "1.0.18"

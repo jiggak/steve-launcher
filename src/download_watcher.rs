@@ -16,82 +16,57 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use notify::{Config, Error, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use notify_debouncer_full::{
+    DebounceEventResult, Debouncer, NoCache, new_debouncer,
+    notify::{INotifyWatcher, RecursiveMode, Result}
+};
 use std::{
-    collections::HashMap, path::{Path, PathBuf}, sync::mpsc::{self, Sender},
-    sync::Arc, sync::Mutex, thread
+    collections::HashMap, path::{Path, PathBuf}, sync::mpsc::Sender,
+    time::Duration
 };
 
 use crate::env;
 
-pub struct DownloadWatcher {
-    pub watch_dir: PathBuf,
-    file_state: Arc<Mutex<HashMap<String, bool>>>
+pub enum WatcherMessage {
+    AllComplete,
+    FileComplete(PathBuf),
+    // FIXME it's kinda weird having this variant here instead of cli app
+    KeyPress(char)
 }
 
-impl<'a> DownloadWatcher {
-    pub fn new<I>(files: I) -> Self
-        where I: Iterator<Item = &'a str>
+pub struct WatcherHandle {
+    _debouncer: Debouncer<INotifyWatcher, NoCache>
+}
+
+impl WatcherHandle {
+    pub fn stop(self) {
+        drop(self)
+    }
+}
+
+pub struct WatchList {
+    watch_list: HashMap<String, bool>,
+    pub watch_dir: PathBuf
+}
+
+impl WatchList {
+    pub fn new<I, S>(file_names: I) -> WatchList
+        where I: Iterator<Item = S>, S: AsRef<str>
     {
         let watch_dir = env::get_downloads_dir();
-        let file_state = files
-            .map(|f| (f.to_string(), watch_dir.join(f).exists()))
+        let watch_list = file_names
+            .map(|f| (f.as_ref().to_string(), watch_dir.join(f.as_ref()).exists()))
             .collect();
 
-        DownloadWatcher {
-            watch_dir,
-            file_state: Arc::new(Mutex::new(file_state))
-        }
+        Self { watch_list, watch_dir }
     }
 
-    pub fn watch<'scope, 'env>(&'env self, scope: &'scope thread::Scope<'scope, 'env>, tx: Sender<WatcherMessage>) -> notify::Result<impl Fn()> {
-        let (watch_tx, watch_rx) = mpsc::channel();
-
-        let mut watcher = RecommendedWatcher::new(watch_tx.clone(), Config::default())?;
-        let watch_cancel = move || {
-            let _ = watch_tx.send(Ok(Event::new(EventKind::Other)));
-        };
-
-        scope.spawn(move || -> notify::Result<()> {
-            // starting watcher inside thread so that it doesn't get dropped
-            // from parent scope when method returns
-            watcher.watch(&self.watch_dir, RecursiveMode::NonRecursive)?;
-
-            for result in watch_rx {
-                match result {
-                    Ok(notify::Event { kind: EventKind::Other, .. }) => break,
-                    Ok(event) => {
-                        for path in event.paths {
-                            if self.on_file_complete(&path) {
-                                tx.send(WatcherMessage::FileComplete(path)).unwrap();
-                            }
-                        }
-
-                        if self.is_all_complete() {
-                            tx.send(WatcherMessage::AllComplete).unwrap();
-                            break;
-                        }
-                    },
-                    Err(error) => {
-                        tx.send(WatcherMessage::Error(error)).unwrap();
-                        break;
-                    }
-                }
-            }
-
-            Ok(())
-        });
-
-        Ok(watch_cancel)
-    }
-
-    fn on_file_complete(&self, path: &Path) -> bool {
+    pub fn on_file_complete(&mut self, path: &Path) -> bool {
         let path_file_name = path.file_name()
             .and_then(|p| p.to_str())
             .unwrap();
 
-        let mut file_state = self.file_state.lock().unwrap();
-        if let Some(value) = file_state.get_mut(path_file_name) {
+        if let Some(value) = self.watch_list.get_mut(path_file_name) {
             *value = true;
             true
         } else {
@@ -100,21 +75,49 @@ impl<'a> DownloadWatcher {
     }
 
     pub fn is_file_complete(&self, file_name: &String) -> bool {
-        match self.file_state.lock().unwrap().get(file_name) {
+        match self.watch_list.get(file_name) {
             Some(v) => *v,
             None => false
         }
     }
 
     pub fn is_all_complete(&self) -> bool {
-        self.file_state.lock().unwrap().values().all(|v| *v)
+        self.watch_list.values().all(|v| *v)
     }
 }
 
-pub enum WatcherMessage {
-    AllComplete,
-    FileComplete(PathBuf),
-    // FIXME it's kinda weird having this variant here instead of cli app
-    KeyPress(char),
-    Error(Error)
+pub fn watch_downloads(tx: Sender<WatcherMessage>) -> Result<WatcherHandle> {
+    let watch_dir = env::get_downloads_dir();
+
+    let mut debouncer = new_debouncer(Duration::from_secs(1), None, move |result: DebounceEventResult| {
+        match result {
+            Ok(events) => {
+                for event in events {
+                    for path in &event.paths {
+                        if is_download_complete(path) {
+                            tx.send(WatcherMessage::FileComplete(path.clone())).unwrap();
+                        }
+                    }
+                }
+            },
+            Err(_errors) => { },
+        }
+    })?;
+
+    debouncer.watch(watch_dir, RecursiveMode::NonRecursive)?;
+
+    Ok(WatcherHandle {
+        _debouncer: debouncer
+    })
+}
+
+fn is_download_complete(path: &Path) -> bool {
+    if !path.is_file() {
+        false
+    } else {
+        match path.extension().and_then(|e| e.to_str()) {
+            Some("crdownload") | Some("part") | Some("download") => false,
+            _ => true,
+        }
+    }
 }
