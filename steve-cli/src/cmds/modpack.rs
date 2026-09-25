@@ -20,7 +20,7 @@ use anyhow::{Result, anyhow};
 use console::Term;
 use dialoguer::Select;
 use std::{
-    io::Result as IoResult, path::Path, process::{Command, Stdio},
+    io::Result as IoResult, path::{Path, PathBuf}, process::{Command, Stdio},
     sync::{Arc, atomic::{AtomicBool, Ordering}, mpsc::{self, Sender}},
     thread::{self, Scope}
 };
@@ -29,7 +29,7 @@ use crate::ProgressBars;
 use steve::{
     BeginProgress, CurseForgeZip, FileDownload, Installer,
     InstallTarget, Instance, Modpack, ModpackId, ModpackManifest, ModpackVersion,
-    ModpackVersionManifest, ModpacksClient, WatchList, WatcherMessage, watch_downloads
+    ModpackVersionManifest, ModpacksClient, WatchList, watch_downloads
 };
 use super::{console_theme, prompt_confirm};
 
@@ -267,6 +267,11 @@ pub async fn modpack_update(instance_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+enum DownloaderMessage {
+    FileComplete(PathBuf),
+    KeyPress(char),
+}
+
 fn download_blocked(installer: &Installer, downloads: Vec<FileDownload>) -> Result<()> {
     let mut watch_list = WatchList::new(
         downloads.iter()
@@ -295,12 +300,14 @@ fn download_blocked(installer: &Installer, downloads: Vec<FileDownload>) -> Resu
     let (tx, rx) = mpsc::channel();
 
     thread::scope(|scope| -> Result<()> {
-        let watcher = watch_downloads(tx.clone())?;
-        let readkey_cancel = readkey_thread(scope, term.clone(), tx);
+        let readkey_cancel = readkey_thread(scope, term.clone(), tx.clone());
+        let watcher = watch_downloads(move |file_path| {
+            tx.send(DownloaderMessage::FileComplete(file_path.to_owned())).unwrap();
+        })?;
 
         while let Ok(msg) = rx.recv() {
             match msg {
-                WatcherMessage::FileComplete(file_path) => {
+                DownloaderMessage::FileComplete(file_path) => {
                     if watch_list.on_file_complete(&file_path) {
                         let file_name = file_path.file_name().unwrap().to_string_lossy();
                         let file = downloads.iter()
@@ -314,7 +321,7 @@ fn download_blocked(installer: &Installer, downloads: Vec<FileDownload>) -> Resu
                         }
                     }
                 },
-                WatcherMessage::KeyPress(ch) => {
+                DownloaderMessage::KeyPress(ch) => {
                     match ch {
                         'o' => {
                             let pending_downloads = downloads.iter()
@@ -378,7 +385,7 @@ fn open_urls<'a, T>(urls: T) -> IoResult<()>
     Ok(())
 }
 
-fn readkey_thread<'scope>(scope: &'scope Scope<'scope, '_>, term: Term, tx: Sender<WatcherMessage>) -> impl Fn() {
+fn readkey_thread<'scope>(scope: &'scope Scope<'scope, '_>, term: Term, tx: Sender<DownloaderMessage>) -> impl Fn() {
     let stop = Arc::new(AtomicBool::new(false));
 
     let stop_thread = stop.clone();
@@ -387,7 +394,7 @@ fn readkey_thread<'scope>(scope: &'scope Scope<'scope, '_>, term: Term, tx: Send
     scope.spawn(move || -> IoResult<()> {
         while !stop_thread.load(Ordering::Relaxed) {
             let ch = term.read_char()?;
-            tx.send(WatcherMessage::KeyPress(ch)).unwrap();
+            tx.send(DownloaderMessage::KeyPress(ch)).unwrap();
         }
 
         Ok(())

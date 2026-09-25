@@ -43,7 +43,6 @@ pub use {
     curseforge_zip::CurseForgeZip,
     download_watcher::watch_downloads,
     download_watcher::WatchList,
-    download_watcher::WatcherMessage,
     installer::FileDownload,
     installer::Installer,
     installer::InstallTarget,

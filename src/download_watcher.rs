@@ -21,18 +21,10 @@ use notify_debouncer_full::{
     notify::{INotifyWatcher, RecursiveMode, Result}
 };
 use std::{
-    collections::HashMap, path::{Path, PathBuf}, sync::mpsc::Sender,
-    time::Duration
+    collections::HashMap, path::{Path, PathBuf}, time::Duration
 };
 
 use crate::env;
-
-pub enum WatcherMessage {
-    AllComplete,
-    FileComplete(PathBuf),
-    // FIXME it's kinda weird having this variant here instead of cli app
-    KeyPress(char)
-}
 
 pub struct WatcherHandle {
     _debouncer: Debouncer<INotifyWatcher, NoCache>
@@ -86,7 +78,9 @@ impl WatchList {
     }
 }
 
-pub fn watch_downloads(tx: Sender<WatcherMessage>) -> Result<WatcherHandle> {
+pub fn watch_downloads<F>(mut on_download: F) -> Result<WatcherHandle>
+    where F: FnMut(&Path) + Send + 'static
+{
     let watch_dir = env::get_downloads_dir();
 
     let mut debouncer = new_debouncer(Duration::from_secs(1), None, move |result: DebounceEventResult| {
@@ -95,7 +89,7 @@ pub fn watch_downloads(tx: Sender<WatcherMessage>) -> Result<WatcherHandle> {
                 for event in events {
                     for path in &event.paths {
                         if is_download_complete(path) {
-                            tx.send(WatcherMessage::FileComplete(path.clone())).unwrap();
+                            on_download(path);
                         }
                     }
                 }
