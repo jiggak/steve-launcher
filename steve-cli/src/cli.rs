@@ -87,6 +87,7 @@ pub enum Commands {
         command: ServerCommands
     },
 
+    /// Check for modpack updates, and prompt to install if new version found
     Update,
 
     /// Output bash completion code
