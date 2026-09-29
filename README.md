@@ -29,16 +29,25 @@ Currently, steve requires a few environment variables to build:
 > So if I'm giving out the keys in a binary, what's the difference with handing
 > out keys for others to use (appart from feeling like the wrong thing to do)?
 
-You can put them in `.cargo/config.toml` for convenient discovery by cargo,
-or provide as variables before the `cargo` command:
+You can set these variables with your prefered environment loader
+(e.g. [direnv](https://direnv.net/)), or provide them before the `cargo` command.
 
-    MSA_CLIENT_ID=... CURSE_API_KEY=... cargo ...
+    # Set variable inline with the cargo command
+    MSA_CLIENT_ID=... CURSE_API_KEY=... cargo build
+
+Steve also looks for these environment variables at runtime:
+
+    CURSE_API_KEY=... steve modpack "ATM10"
 
 Assuming you have `~/.local/bin` in your `PATH`, you can install the single
 `steve` binary with:
 
     # Install to ~/.local/bin/steve
     cargo install --path steve-cli --root ~/.local
+
+Or if you have the [just command runner](https://github.com/casey/just):
+
+    just install
 
 # Usage
 
