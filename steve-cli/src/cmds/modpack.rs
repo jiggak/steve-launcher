@@ -346,6 +346,7 @@ fn download_blocked(installer: &Installer, downloads: Vec<FileDownload>) -> Resu
     watcher.stop();
     readkey.stop()?;
 
+    // clear terminal and move cursor to top/left
     stdout.queue(terminal::Clear(terminal::ClearType::All))?
         .queue(cursor::MoveTo(0, 0))?
         .queue(cursor::Show)?
@@ -364,8 +365,10 @@ fn print_download_state(stdout: &mut Stdout, watch_list: &WatchList, downloads: 
         write!(stdout, "{status} {url}\r\n", url = x.url.as_str())?;
     }
 
-    stdout.execute(cursor::MoveToColumn(0))?;
-    stdout.execute(cursor::MoveUp(downloads.len() as u16))?;
+    // move cursor into position to redraw file list
+    stdout.queue(cursor::MoveToColumn(0))?
+        .queue(cursor::MoveUp(downloads.len() as u16))?
+        .flush()?;
 
     Ok(())
 }
