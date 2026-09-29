@@ -27,6 +27,7 @@ use std::{
 use crate::env;
 
 pub struct WatcherHandle {
+    // keep debouncer instance so that our stop() method can drop(self) to stop watcher
     _debouncer: Debouncer<INotifyWatcher, NoCache>
 }
 
@@ -81,9 +82,7 @@ impl WatchList {
 pub fn watch_downloads<F>(mut on_download: F) -> Result<WatcherHandle>
     where F: FnMut(&Path) + Send + 'static
 {
-    let watch_dir = env::get_downloads_dir();
-
-    let mut debouncer = new_debouncer(Duration::from_secs(1), None, move |result: DebounceEventResult| {
+    let handle_event = move |result: DebounceEventResult| {
         match result {
             Ok(events) => {
                 for event in events {
@@ -94,10 +93,17 @@ pub fn watch_downloads<F>(mut on_download: F) -> Result<WatcherHandle>
                     }
                 }
             },
-            Err(_errors) => { },
+            Err(errors) => {
+                for err in errors {
+                    eprintln!("Watcher error: {:?}", err);
+                }
+            },
         }
-    })?;
+    };
 
+    let mut debouncer = new_debouncer(Duration::from_secs(1), None, handle_event)?;
+
+    let watch_dir = env::get_downloads_dir();
     debouncer.watch(watch_dir, RecursiveMode::NonRecursive)?;
 
     Ok(WatcherHandle {
