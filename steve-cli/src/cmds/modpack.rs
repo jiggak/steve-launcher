@@ -17,19 +17,23 @@
  */
 
 use anyhow::{Result, anyhow};
-use console::Term;
+use crossterm::{
+    ExecutableCommand, QueueableCommand, cursor,
+    event::{self, Event, KeyCode, KeyEventKind}, terminal
+};
 use dialoguer::Select;
 use std::{
-    io::Result as IoResult, path::Path, process::{Command, Stdio},
+    io::{Result as IoResult, Stdout, Write, stdout}, path::{Path, PathBuf},
+    process::{Command, Stdio},
     sync::{Arc, atomic::{AtomicBool, Ordering}, mpsc::{self, Sender}},
-    thread::{self, Scope}
+    thread::{self, JoinHandle}, time::Duration
 };
 
 use crate::ProgressBars;
 use steve::{
-    BeginProgress, CurseForgeZip, DownloadWatcher, FileDownload, Installer,
+    BeginProgress, CurseForgeZip, FileDownload, Installer,
     InstallTarget, Instance, Modpack, ModpackId, ModpackManifest, ModpackVersion,
-    ModpackVersionManifest, ModpacksClient, WatcherMessage
+    ModpackVersionManifest, ModpacksClient, WatchList, watch_downloads
 };
 use super::{console_theme, prompt_confirm};
 
@@ -267,97 +271,104 @@ pub async fn modpack_update(instance_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+enum DownloaderMessage {
+    FileComplete(PathBuf),
+    KeyPress(char),
+}
+
 fn download_blocked(installer: &Installer, downloads: Vec<FileDownload>) -> Result<()> {
-    let watcher = DownloadWatcher::new(
+    let mut watch_list = WatchList::new(
         downloads.iter()
             .map(|f| f.file_name.as_str())
     );
 
     // copy any downloads already in watch dir
     for f in &downloads {
-        if watcher.is_file_complete(&f.file_name) {
-            let file_path = watcher.watch_dir.join(&f.file_name);
+        if watch_list.is_file_complete(&f.file_name) {
+            let file_path = watch_list.watch_dir.join(&f.file_name);
             installer.install_file(f, &file_path)?;
         }
     }
 
-    if watcher.is_all_complete() {
+    if watch_list.is_all_complete() {
         return Ok(());
     }
 
-    let term = Term::stdout();
-    term.hide_cursor()?;
+    let mut stdout = stdout();
+    stdout.execute(cursor::Hide)?;
 
-    term.write_line("Files below must be downloaded manually. Press [o] to open all, [x] to quit.")?;
+    writeln!(&stdout, "Files below must be downloaded manually. Press [o] to open all, [x] to quit.")?;
 
-    print_download_state(&term, &watcher, &downloads)?;
+    print_download_state(&mut stdout, &watch_list, &downloads)?;
 
     let (tx, rx) = mpsc::channel();
 
-    thread::scope(|scope| -> Result<()> {
-        let watch_cancel = watcher.watch(scope, tx.clone())?;
-        let readkey_cancel = readkey_thread(scope, term.clone(), tx);
+    let readkey = ReadKeyThread::start(tx.clone())?;
+    let watcher = watch_downloads(move |file_path| {
+        // not sure why, but this gets fired after watcher.stop(), so ignore Err result
+        let _ = tx.send(DownloaderMessage::FileComplete(file_path.to_owned()));
+    })?;
 
-        while let Ok(msg) = rx.recv() {
-            match msg {
-                WatcherMessage::FileComplete(file_path) => {
+    while let Ok(msg) = rx.recv() {
+        match msg {
+            DownloaderMessage::FileComplete(file_path) => {
+                if watch_list.on_file_complete(&file_path) {
                     let file_name = file_path.file_name().unwrap().to_string_lossy();
                     let file = downloads.iter()
                         .find(|d| d.file_name == file_name)
                         .unwrap();
                     installer.install_file(file, &file_path)?;
-                    print_download_state(&term, &watcher, &downloads)?;
-                },
-                WatcherMessage::AllComplete => {
-                    break;
-                },
-                WatcherMessage::KeyPress(ch) => {
-                    match ch {
-                        'o' => {
-                            open_urls(
-                                downloads.iter()
-                                    .filter_map(|d| match watcher.is_file_complete(&d.file_name) {
-                                        false => Some(d.url.as_str()),
-                                        _ => None
-                                    })
-                            )?;
-                        },
-                        'x' => {
-                            break;
-                        },
-                        _ => { }
+                    print_download_state(&mut stdout, &watch_list, &downloads)?;
+
+                    if watch_list.is_all_complete() {
+                        break;
                     }
-                },
-                WatcherMessage::Error(_) => {
-                    break;
+                }
+            },
+            DownloaderMessage::KeyPress(ch) => {
+                match ch {
+                    'o' => {
+                        let pending_downloads = downloads.iter()
+                            .filter_map(|d| match watch_list.is_file_complete(&d.file_name) {
+                                false => Some(d.url.as_str()),
+                                _ => None
+                            });
+
+                        open_urls(pending_downloads)?;
+                    },
+                    'x' => break,
+                    _ => { }
                 }
             }
         }
+    }
 
-        watch_cancel();
-        readkey_cancel();
+    watcher.stop();
+    readkey.stop()?;
 
-        term.clear_to_end_of_screen()?;
-        term.show_cursor()?;
-
-        Ok(())
-    })?;
+    // clear terminal and move cursor to top/left
+    stdout.queue(terminal::Clear(terminal::ClearType::All))?
+        .queue(cursor::MoveTo(0, 0))?
+        .queue(cursor::Show)?
+        .flush()?;
 
     Ok(())
 }
 
-fn print_download_state(term: &Term, watcher: &DownloadWatcher, downloads: &Vec<FileDownload>) -> IoResult<()> {
+fn print_download_state(stdout: &mut Stdout, watch_list: &WatchList, downloads: &Vec<FileDownload>) -> IoResult<()> {
     for x in downloads {
-        let status = match watcher.is_file_complete(&x.file_name) {
-            true => "✅", false => "❌"
+        let status = match watch_list.is_file_complete(&x.file_name) {
+            true => "✅",
+            false => "❌"
         };
 
-        term.write_line(
-            format!("{status} {url}", url = x.url).as_str()
-        )?;
+        write!(stdout, "{status} {url}\r\n", url = x.url.as_str())?;
     }
 
-    term.move_cursor_up(downloads.len())?;
+    // move cursor into position to redraw file list
+    stdout.queue(cursor::MoveToColumn(0))?
+        .queue(cursor::MoveUp(downloads.len() as u16))?
+        .flush()?;
 
     Ok(())
 }
@@ -376,22 +387,42 @@ fn open_urls<'a, T>(urls: T) -> IoResult<()>
     Ok(())
 }
 
-fn readkey_thread<'scope>(scope: &'scope Scope<'scope, '_>, term: Term, tx: Sender<WatcherMessage>) -> impl Fn() {
-    let stop = Arc::new(AtomicBool::new(false));
+struct ReadKeyThread {
+    stop: Arc<AtomicBool>,
+    handle: JoinHandle<IoResult<()>>
+}
 
-    let stop_thread = stop.clone();
-    let exit_thread = move || stop.store(true, Ordering::Relaxed);
+impl ReadKeyThread {
+    fn start(tx: Sender<DownloaderMessage>) -> IoResult<Self> {
+        terminal::enable_raw_mode()?;
 
-    scope.spawn(move || -> IoResult<()> {
-        while !stop_thread.load(Ordering::Relaxed) {
-            let ch = term.read_char()?;
-            tx.send(WatcherMessage::KeyPress(ch)).unwrap();
-        }
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_thread = stop.clone();
 
-        Ok(())
-    });
+        let handle = thread::spawn(move || -> IoResult<()> {
+            while !stop_thread.load(Ordering::Relaxed) {
+                if event::poll(Duration::from_millis(100))? {
+                    if let Event::Key(key_event) = event::read()? {
+                        if key_event.kind == KeyEventKind::Press {
+                            if let KeyCode::Char(ch) = key_event.code {
+                                tx.send(DownloaderMessage::KeyPress(ch)).unwrap();
+                            }
+                        }
+                    }
+                }
+            }
 
-    exit_thread
+            Ok(())
+        });
+
+        Ok(ReadKeyThread { stop, handle })
+    }
+
+    fn stop(self) -> IoResult<()> {
+        terminal::disable_raw_mode()?;
+        self.stop.store(true, Ordering::Relaxed);
+        self.handle.join().unwrap()
+    }
 }
 
 fn format_modpack_results<'a, I>(items: I) -> Vec<String>
