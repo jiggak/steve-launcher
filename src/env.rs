@@ -20,7 +20,10 @@ use std::env;
 use std::path::PathBuf;
 
 pub fn set_data_dir(path: &str) {
-    env::set_var("STEVE_DATA_HOME", path)
+    // Safety: Calling set_var once early in main is considered safe
+    unsafe {
+        env::set_var("STEVE_DATA_HOME", path)
+    }
 }
 
 pub fn get_data_dir() -> PathBuf {
