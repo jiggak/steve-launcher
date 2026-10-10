@@ -21,7 +21,7 @@ use std::{fs, path::{Path, PathBuf}};
 use anyhow::{bail, Result};
 
 use crate::{
-    AssetClient, BeginProgress, CurseClient, CurseForgeZip, Error, ModLoader, Modpack,
+    AssetClient, BeginProgress, CurseClient, CurseForgeZip, Error, ModLoader, Modpack, Progress,
     json::{CurseForgeFile, CurseForgeMod, ModpackVersionManifest}
 };
 
@@ -84,9 +84,9 @@ impl Installer {
         Ok(())
     }
 
-    pub async fn install_pack_zip(&self,
+    pub async fn install_pack_zip<P: BeginProgress>(&self,
         pack: &CurseForgeZip,
-        progress: &impl BeginProgress
+        progress: &P
     ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
         // copy pack overrides to minecraft dir
         pack.copy_game_data(&self.dest_dir)?;
@@ -103,10 +103,10 @@ impl Installer {
         ).await
     }
 
-    pub async fn install_pack(&self,
+    pub async fn install_pack<P: BeginProgress>(&self,
         pack: &ModpackVersionManifest,
         is_server: bool,
-        progress: &impl BeginProgress
+        progress: &P
     ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
         let pack_files: Vec<_> = if is_server {
             pack.files.iter()
@@ -167,7 +167,7 @@ impl Installer {
             main_progress.set_position(i + 1);
         }
 
-        main_progress.end();
+        drop(main_progress);
 
         let mods: Vec<_> = pack_files.iter()
             .filter_map(|f| f.curseforge.as_ref())
@@ -188,10 +188,10 @@ impl Installer {
         ).await
     }
 
-    pub async fn install_curseforge_file(&self,
+    pub async fn install_curseforge_file<P: BeginProgress>(&self,
         mod_id: u32,
         file_id: u32,
-        progress: &impl BeginProgress
+        progress: &P
     ) -> Result<Option<Vec<FileDownload>>> {
         let result = self.download_curseforge_files(
             vec![file_id],
@@ -203,11 +203,11 @@ impl Installer {
         Ok(result.1)
     }
 
-    async fn download_curseforge_files(&self,
+    async fn download_curseforge_files<P: BeginProgress>(&self,
         file_ids: Vec<u32>,
         project_ids: Vec<u32>,
         mut installed_files: Vec<PathBuf>,
-        progress: &impl BeginProgress
+        progress: &P
     ) -> Result<(Vec<PathBuf>, Option<Vec<FileDownload>>)> {
         let mut file_list = self.curse_client.get_files(&file_ids).await?;
         let mut mod_list = self.curse_client.get_mods(&project_ids).await?;

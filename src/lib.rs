@@ -102,11 +102,12 @@ pub enum Error {
 }
 
 pub trait BeginProgress {
-    fn begin<S: Into<String>>(&self, message: S, length: usize) -> Box<dyn Progress>;
+    type Handle: Progress + Send + Sync;
+
+    fn begin<S: Into<String>>(&self, message: S, length: usize) -> Self::Handle;
 }
 
 pub trait Progress {
     fn set_position(&self, pos: usize);
     fn set_length(&self, len: usize);
-    fn end(&self);
 }

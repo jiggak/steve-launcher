@@ -20,7 +20,7 @@ use anyhow::{Context, Result};
 use semver::{Version, VersionReq};
 use std::{collections::HashMap, fs, path::Path, path::PathBuf};
 
-use crate::{asset_client::AssetClient, env, zip, BeginProgress, Error};
+use crate::{asset_client::AssetClient, env, zip, BeginProgress, Error, Progress};
 use crate::json::{
     AssetManifest, ForgeDistribution, ForgeLibrary, ForgeManifest, GameLibrary,
     GameManifest, ModLoader
@@ -158,9 +158,9 @@ impl AssetManager {
         self.client.download_file(&url, &object_file, progress).await
     }
 
-    pub async fn download_libraries(&self,
+    pub async fn download_libraries<P: BeginProgress>(&self,
         game_manifest: &GameManifest,
-        progress: &impl BeginProgress
+        progress: &P
     ) -> Result<()> {
         let client_path = get_client_jar_path(&game_manifest.id);
         let mut lib_downloads: Vec<(_, _)> = vec![
@@ -187,9 +187,9 @@ impl AssetManager {
         Ok(())
     }
 
-    pub async fn download_loader_libraries(&self,
+    pub async fn download_loader_libraries<P: BeginProgress>(&self,
         forge_manifest: &ForgeManifest,
-        progress: &impl BeginProgress
+        progress: &P
     ) -> Result<()> {
         let mut downloads: Vec<&ForgeLibrary> = vec![];
 
@@ -224,9 +224,9 @@ impl AssetManager {
         Ok(())
     }
 
-    pub async fn download_installer_jar(&self,
+    pub async fn download_installer_jar<P: BeginProgress>(&self,
         mod_loader: &ModLoader,
-        progress: &impl BeginProgress
+        progress: &P
     ) -> Result<PathBuf> {
         let manifest = self.get_loader_manifest(mod_loader).await?;
 
@@ -248,10 +248,10 @@ impl AssetManager {
         return Ok(self.libs_dir.join(installer_path));
     }
 
-    pub async fn download_server_jar(&self,
+    pub async fn download_server_jar<P: BeginProgress>(&self,
         mc_version: &str,
         path: &Path,
-        progress: &impl BeginProgress
+        progress: &P
     ) -> Result<()> {
         let manifest = self.get_game_manifest(mc_version).await?;
 
@@ -281,10 +281,10 @@ impl AssetManager {
         self.client.download_file(url, &lib_file, progress).await
     }
 
-    pub fn copy_resources(&self,
+    pub fn copy_resources<P: BeginProgress>(&self,
         asset_manifest: &AssetManifest,
         target_dir: &Path,
-        progress: &impl BeginProgress
+        progress: &P
     ) -> Result<()> {
         let progress = progress.begin("Copy resources", asset_manifest.objects.len());
 
@@ -306,10 +306,10 @@ impl AssetManager {
         Ok(())
     }
 
-    pub fn extract_natives(self,
+    pub fn extract_natives<P: BeginProgress>(self,
         game_manifest: &GameManifest,
         target_dir: &Path,
-        progress: &impl BeginProgress
+        progress: &P
     ) -> Result<()> {
         let native_libs: Vec<_> = game_manifest.libraries.iter()
             .filter(|lib| lib.has_rules_match())

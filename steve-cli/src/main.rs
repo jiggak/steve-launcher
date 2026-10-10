@@ -18,6 +18,7 @@
 
 mod cli;
 mod cmds;
+mod tui;
 
 use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
 use std::{env as stdenv, io, path::{Path, PathBuf}};
@@ -125,7 +126,9 @@ impl ProgressBars {
 }
 
 impl BeginProgress for ProgressBars {
-    fn begin<S: Into<String>>(&self, message: S, length: usize) -> Box<dyn Progress> {
+    type Handle = ProgressHandler;
+
+    fn begin<S: Into<String>>(&self, message: S, length: usize) -> Self::Handle {
         let style = ProgressStyle::with_template(
             // "{bar:40.cyan/blue} {msg} {pos}/{len}"
             "{bar:40.cyan/blue} {msg} {percent}% [{pos}/{len}]"
@@ -143,7 +146,7 @@ impl BeginProgress for ProgressBars {
         // causes progress bar to be displayed now
         progress.set_position(0);
 
-        Box::new(ProgressHandler { progress })
+        ProgressHandler { progress }
     }
 }
 
@@ -154,10 +157,6 @@ impl Progress for ProgressHandler {
 
     fn set_length(&self, len: usize) {
         self.progress.set_length(len as u64);
-    }
-
-    fn end(&self) {
-        self.progress.finish_and_clear();
     }
 }
 

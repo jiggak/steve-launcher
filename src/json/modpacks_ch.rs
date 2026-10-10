@@ -88,7 +88,7 @@ pub struct ModpackVersionSpecs {
     pub recommended: u32
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct ModpackVersionTarget {
     pub id: i32,
     pub version: String,
@@ -99,7 +99,7 @@ pub struct ModpackVersionTarget {
 }
 
 // https://api.modpacks.ch/public/modpack/{pack_id}/{version_id}
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct ModpackVersionManifest {
     #[serde(rename(deserialize = "id"))]
     pub version_id: u32,
@@ -138,7 +138,7 @@ impl ModpackVersionManifest {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct ModpackFile {
     pub id: u32,
     pub name: String,
@@ -160,7 +160,7 @@ pub struct ModpackFile {
     pub curseforge: Option<ModpackFileCurseforge>
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct ModpackFileCurseforge {
     #[serde(rename(deserialize = "project"), deserialize_with = "de_string_or_number")]
     pub project_id: u32,

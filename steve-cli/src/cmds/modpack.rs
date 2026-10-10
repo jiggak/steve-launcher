@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use crossterm::{
     ExecutableCommand, QueueableCommand, cursor,
     event::{self, Event, KeyCode, KeyEventKind}, terminal
@@ -29,11 +29,11 @@ use std::{
     thread::{self, JoinHandle}, time::Duration
 };
 
-use crate::ProgressBars;
+use crate::{ProgressBars, tui::{App, ModpackUpdate}};
 use steve::{
     BeginProgress, CurseForgeZip, FileDownload, Installer,
     InstallTarget, Instance, Modpack, ModpackId, ModpackManifest, ModpackVersion,
-    ModpackVersionManifest, ModpacksClient, WatchList, watch_downloads
+    ModpackVersionManifest, ModpacksClient, Progress, WatchList, watch_downloads
 };
 use super::{console_theme, prompt_confirm};
 
@@ -97,7 +97,7 @@ pub async fn search_modpacks(search: &str, limit: u8) -> Result<ModpackVersionMa
         progress.set_position(count);
     }
 
-    progress.end();
+    drop(progress);
 
     let selection = Select::with_theme(&console_theme())
         .items(&format_modpack_results(search_results.iter()))
@@ -239,34 +239,25 @@ pub async fn modpack_zip_install(
 }
 
 pub async fn modpack_update(instance_dir: &Path) -> Result<()> {
-    let mut instance = Instance::load(instance_dir)?;
+    let instance = Instance::load(instance_dir)?;
 
-    if let Some(modpack) = &instance.manifest.modpack {
-        if let ModpackId::CurseForge { mod_id, version } = &modpack.id {
-            let client = ModpacksClient::new();
+    let Some(ModpackId::CurseForge { mod_id, version }) =
+        instance.manifest.modpack.as_ref().map(|m| &m.id)
+    else {
+        println!("Only CurseForge instances can be updated automatically");
+        return Ok(());
+    };
 
-            let pack_id = *mod_id;
-            let pack = client.get_curse_modpack_versions(pack_id)
-                .await?;
+    let (pack_id, version) = (*mod_id, version.clone());
 
-            // hopefully it's safe to assume first version is latest
-            let latest = pack.versions.first()
-                .ok_or(anyhow!("Pack data has empty `versions` list"))?;
+    let component = ModpackUpdate::with_modpack_manifest(
+        instance,
+        pack_id,
+        version
+    ).await?;
 
-            println!("Current: {version}");
-            println!("Latest: {}", latest.name);
-
-            if prompt_confirm("Would you like to (re)install latest version?")? {
-                let pack = client.get_curse_modpack(pack_id, latest.version_id)
-                    .await?;
-
-                install_pack(&mut instance, false, &pack)
-                    .await?;
-            }
-        } else {
-            println!("Only CurseForge instances can be updates automatically");
-        }
-    }
+    let mut app = App::new(component);
+    app.run().await?;
 
     Ok(())
 }
