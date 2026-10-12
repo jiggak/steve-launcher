@@ -16,9 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{path::{Path, PathBuf}, rc::Rc};
+use std::{cell::RefCell, path::{Path, PathBuf}, rc::Rc};
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use ratatui::Frame;
 use steve::{FileDownload, InstallTarget, Installer, Modpack, ModpackId, ModpackVersionManifest};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
@@ -30,18 +30,21 @@ enum InstallState {
         component: ProgressBars,
         receiver: UnboundedReceiver<InstallerMessage>,
     },
-    DownloadBlocked(DownloadBlocked),
+    DownloadBlocked {
+        component: DownloadBlocked,
+        installed_files: Vec<PathBuf>,
+    },
 }
 
 pub struct InstallPack<T> {
-    instance: Rc<T>,
+    instance: Rc<RefCell<T>>,
     pack: ModpackVersionManifest,
     state: InstallState,
 }
 
 impl<T: InstallTarget> InstallPack<T> {
-    pub fn start_install(instance: Rc<T>, pack: ModpackVersionManifest) -> Self {
-        let receiver = start_installer_thread(&instance.install_dir(), &pack);
+    pub fn start_install(instance: Rc<RefCell<T>>, pack: ModpackVersionManifest) -> Self {
+        let receiver = start_installer_thread(&instance.borrow().install_dir(), &pack);
 
         Self {
             instance,
@@ -52,38 +55,6 @@ impl<T: InstallTarget> InstallPack<T> {
             }
         }
     }
-
-    fn finish_install(&mut self, pack_files: &Vec<PathBuf>) -> Result<()> {
-        let instance = Rc::get_mut(&mut self.instance)
-            .ok_or(anyhow!("Unable to get mutable instance"))?;
-
-        let installer = Installer::new(&instance.install_dir());
-
-        instance.set_mc_version(self.pack.get_minecraft_version()?)?;
-        instance.set_mod_loader(self.pack.get_mod_loader()?)?;
-
-        if let Some(modpack) = &instance.get_modpack_manifest() {
-            let old_files = modpack.files_to_paths();
-
-            installer.clean_pack_files(&old_files, &pack_files)?;
-        }
-
-        let pack_files: Vec<_> = pack_files.iter()
-            .map(|f| f.to_string_lossy().to_string())
-            .collect();
-
-        instance.set_modpack_manifest(
-            Modpack {
-                id: ModpackId::CurseForge {
-                    mod_id: self.pack.pack_id,
-                    version: self.pack.name.to_string()
-                },
-                files: pack_files
-            }
-        )?;
-
-        Ok(())
-    }
 }
 
 impl<T: InstallTarget> Component for InstallPack<T> {
@@ -92,13 +63,13 @@ impl<T: InstallTarget> Component for InstallPack<T> {
             InstallState::InstallPack { component, .. } => {
                 component.draw(frame);
             },
-            InstallState::DownloadBlocked(component) => {
+            InstallState::DownloadBlocked { component, .. } => {
                 component.draw(frame);
             }
         }
     }
 
-    async fn handle_event(&mut self, event: &Event) -> anyhow::Result<Action> {
+    async fn handle_event(&mut self, event: &Event) -> Result<Action> {
         let action = match &mut self.state {
             InstallState::InstallPack { component, receiver } => {
                 while let Ok(event) = receiver.try_recv() {
@@ -108,14 +79,20 @@ impl<T: InstallTarget> Component for InstallPack<T> {
                         },
                         InstallerMessage::Complete { pack_files, blocked_downloads } => {
                             if let Some(blocked_downloads) = blocked_downloads {
-                                let component = DownloadBlocked::new(blocked_downloads);
-                                self.state = InstallState::DownloadBlocked(component);
+                                let component = DownloadBlocked::start(
+                                    self.instance.borrow().install_dir(), blocked_downloads
+                                )?;
+
+                                self.state = InstallState::DownloadBlocked {
+                                    component,
+                                    installed_files: pack_files
+                                };
                                 return Ok(Action::Noop);
                             } else {
                                 // FIXME On this call to handle_event we processed several `Progress`
                                 // events, then `Complete` was sent causing the UI to skip rendering
                                 // that last few percent of the progress (less than ideal).
-                                self.finish_install(&pack_files)?;
+                                finish_install(&mut *self.instance.borrow_mut(), &self.pack, &pack_files)?;
                                 return Ok(Action::Quit);
                             }
                         },
@@ -127,8 +104,14 @@ impl<T: InstallTarget> Component for InstallPack<T> {
 
                 Action::Noop
             },
-            InstallState::DownloadBlocked(component) => {
-                component.handle_event(event).await?
+            InstallState::DownloadBlocked { component, installed_files } => {
+                match component.handle_event(event).await? {
+                    Action::Complete => {
+                        finish_install(&mut *self.instance.borrow_mut(), &self.pack, installed_files)?;
+                        Action::Quit
+                    },
+                    other => other
+                }
             }
         };
 
@@ -170,4 +153,38 @@ fn start_installer_thread(
     });
 
     rx
+}
+
+fn finish_install<T: InstallTarget>(
+    instance: &mut T,
+    pack: &ModpackVersionManifest,
+    installed_files: &Vec<PathBuf>
+) -> Result<()> {
+    // let mut instance = instance.borrow_mut();
+    let installer = Installer::new(&instance.install_dir());
+
+    instance.set_mc_version(pack.get_minecraft_version()?)?;
+    instance.set_mod_loader(pack.get_mod_loader()?)?;
+
+    if let Some(modpack) = &instance.get_modpack_manifest() {
+        let old_files = modpack.files_to_paths();
+
+        installer.clean_pack_files(&old_files, &installed_files)?;
+    }
+
+    let pack_files: Vec<_> = installed_files.iter()
+        .map(|f| f.to_string_lossy().to_string())
+        .collect();
+
+    instance.set_modpack_manifest(
+        Modpack {
+            id: ModpackId::CurseForge {
+                mod_id: pack.pack_id,
+                version: pack.name.to_string()
+            },
+            files: pack_files
+        }
+    )?;
+
+    Ok(())
 }

@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 use anyhow::{Result, anyhow};
 use ratatui::{
@@ -39,7 +39,13 @@ enum State {
 }
 
 pub struct ModpackUpdate {
-    instance: Rc<Instance>,
+    // I used Rc<RefCell>> to mutate in other child structs.
+    // Using `instance` is a bit yuck with having to call `borrow*` first.
+    // I question why not just use `Instance`. With the shared mutable
+    // you can be sure it's values are always current, even if another componet
+    // mutated it. There is some tiny memory savings by not cloning the whole
+    // instance manifest for each component.
+    instance: Rc<RefCell<Instance>>,
     latest_pack: ModpackVersionManifest,
     state: State,
 }
@@ -66,7 +72,7 @@ impl ModpackUpdate {
         let confirm_prompt = ConfirmPrompt::new("Would you like to (re)install latest version?");
 
         let component = Self {
-            instance: Rc::new(instance),
+            instance: Rc::new(RefCell::new(instance)),
             latest_pack,
             state: State::Confirm {
                 component: confirm_prompt,

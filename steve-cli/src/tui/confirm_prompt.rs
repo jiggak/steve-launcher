@@ -45,6 +45,7 @@ impl Widget for &ConfirmPrompt {
             " (y/n) ".dark_gray(),
             (if self.confirmed { "yes" } else { "no" }).green(),
         ]);
+
         line.render(area, buf);
     }
 }

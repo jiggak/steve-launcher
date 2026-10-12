@@ -44,9 +44,14 @@ pub trait Component {
 
 #[derive(Debug)]
 pub enum Action {
+    /// No action (probably should use Option<Action> instead)
     Noop,
+    /// Quit app
     Quit,
+    /// User confirmed prompt
     Confirm,
+    /// Component completed
+    Complete,
 }
 
 pub struct App<C> {
@@ -61,7 +66,7 @@ impl<C: Component> App<C> {
     }
 
     pub async fn run(&mut self) -> Result<()> {
-        let mut events = EventStreamThread::start(5.0);
+        let mut events = EventStreamThread::start(20.0);
         let mut terminal = ratatui::init();
 
         loop {
