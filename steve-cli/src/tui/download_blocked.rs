@@ -36,7 +36,7 @@ impl DownloadBlocked {
     pub fn start<P: AsRef<Path>>(
         dest_dir: P,
         blocked_downloads: Vec<FileDownload>
-    ) -> Result<Self> {
+    ) -> Result<Option<Self>> {
         let installer = Installer::new(dest_dir.as_ref());
 
         let watch_list = WatchList::new(
@@ -52,6 +52,10 @@ impl DownloadBlocked {
             }
         }
 
+        if watch_list.is_all_complete() {
+            return Ok(None);
+        }
+
         let watch_list = Arc::new(Mutex::new(watch_list));
 
         let _watcher = start_download_watcher(
@@ -60,11 +64,11 @@ impl DownloadBlocked {
             installer
         )?;
 
-        Ok(Self {
+        Ok(Some(Self {
             blocked_downloads,
             watch_list,
             _watcher,
-        })
+        }))
     }
 
     fn open_pending_downloads(&self) -> IoResult<()> {
@@ -81,8 +85,6 @@ impl DownloadBlocked {
 
 impl Component for DownloadBlocked {
     fn draw(&self, frame: &mut ratatui::Frame) {
-        // "Files below must be downloaded manually. Press [o] to open all, [q] to quit."
-
         let layout = Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]);
         let [title_area, body_area] = frame.area()
             .layout(&layout);

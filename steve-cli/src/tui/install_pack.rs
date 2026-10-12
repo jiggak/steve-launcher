@@ -83,11 +83,17 @@ impl<T: InstallTarget> Component for InstallPack<T> {
                                     self.instance.install_dir(), blocked_downloads
                                 )?;
 
-                                self.state = InstallState::DownloadBlocked {
-                                    component,
-                                    installed_files: pack_files
-                                };
-                                return Ok(Action::Noop);
+                                if let Some(component) = component {
+                                    self.state = InstallState::DownloadBlocked {
+                                        component,
+                                        installed_files: pack_files
+                                    };
+                                    return Ok(Action::Noop);
+
+                                } else {
+                                    finish_install(&mut self.instance, &self.pack, &pack_files)?;
+                                    return Ok(Action::Quit);
+                                }
                             } else {
                                 finish_install(&mut self.instance, &self.pack, &pack_files)?;
                                 return Ok(Action::Quit);
