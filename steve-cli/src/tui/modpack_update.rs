@@ -20,7 +20,8 @@ use anyhow::{Result, anyhow};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout},
-    text::{Text, ToLine},
+    style::Stylize,
+    text::{Line, Text},
     widgets::Paragraph,
 };
 use steve::{InstallTarget, ModpackVersionManifest, ModpacksClient};
@@ -87,27 +88,28 @@ impl<T: InstallTarget + Clone> Component for ModpackUpdate<T> {
             } => {
                 let frame_layout = Layout::vertical([
                     Constraint::Length(3),
-                    Constraint::Fill(1)
+                    Constraint::Fill(1),
                 ]);
 
                 let [versions_area, prompt_area] = frame.area().layout(&frame_layout);
 
                 let versions_layout = Layout::horizontal([
                     Constraint::Length(10),
-                    Constraint::Fill(1)
+                    Constraint::Fill(1),
                 ]).spacing(1);
 
                 let [labels_area, values_area] = versions_area.layout(&versions_layout);
 
                 let labels = Paragraph::new(Text::from(vec![
-                    "Current:".to_line(),
-                    "Latest:".to_line()
+                    "Current:".bold().into(),
+                    "Latest:".bold().into(),
                 ])).alignment(Alignment::Right);
 
-                let versions = Paragraph::new(Text::from(vec![
-                    current_version.to_line(),
-                    latest_version.to_line(),
-                ]));
+                let version_lines = vec![
+                    Line::from(current_version.clone().dark_gray()),
+                    Line::from(latest_version.clone().green()),
+                ];
+                let versions = Paragraph::new(Text::from(version_lines));
 
                 frame.render_widget(labels, labels_area);
                 frame.render_widget(versions, values_area);
