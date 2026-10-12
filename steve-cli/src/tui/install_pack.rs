@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{cell::RefCell, path::{Path, PathBuf}, rc::Rc};
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use ratatui::Frame;
@@ -37,14 +37,14 @@ enum InstallState {
 }
 
 pub struct InstallPack<T> {
-    instance: Rc<RefCell<T>>,
+    instance: T,
     pack: ModpackVersionManifest,
     state: InstallState,
 }
 
 impl<T: InstallTarget> InstallPack<T> {
-    pub fn start_install(instance: Rc<RefCell<T>>, pack: ModpackVersionManifest) -> Self {
-        let receiver = start_installer_thread(&instance.borrow().install_dir(), &pack);
+    pub fn start_install(instance: T, pack: ModpackVersionManifest) -> Self {
+        let receiver = start_installer_thread(&instance.install_dir(), &pack);
 
         Self {
             instance,
@@ -80,7 +80,7 @@ impl<T: InstallTarget> Component for InstallPack<T> {
                         InstallerMessage::Complete { pack_files, blocked_downloads } => {
                             if let Some(blocked_downloads) = blocked_downloads {
                                 let component = DownloadBlocked::start(
-                                    self.instance.borrow().install_dir(), blocked_downloads
+                                    self.instance.install_dir(), blocked_downloads
                                 )?;
 
                                 self.state = InstallState::DownloadBlocked {
@@ -89,10 +89,7 @@ impl<T: InstallTarget> Component for InstallPack<T> {
                                 };
                                 return Ok(Action::Noop);
                             } else {
-                                // FIXME On this call to handle_event we processed several `Progress`
-                                // events, then `Complete` was sent causing the UI to skip rendering
-                                // that last few percent of the progress (less than ideal).
-                                finish_install(&mut *self.instance.borrow_mut(), &self.pack, &pack_files)?;
+                                finish_install(&mut self.instance, &self.pack, &pack_files)?;
                                 return Ok(Action::Quit);
                             }
                         },
@@ -107,7 +104,7 @@ impl<T: InstallTarget> Component for InstallPack<T> {
             InstallState::DownloadBlocked { component, installed_files } => {
                 match component.handle_event(event).await? {
                     Action::Complete => {
-                        finish_install(&mut *self.instance.borrow_mut(), &self.pack, installed_files)?;
+                        finish_install(&mut self.instance, &self.pack, installed_files)?;
                         Action::Quit
                     },
                     other => other

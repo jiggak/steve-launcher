@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{cell::RefCell, rc::Rc};
-
 use anyhow::{Result, anyhow};
 use ratatui::{
     Frame,
@@ -25,34 +23,28 @@ use ratatui::{
     text::{Text, ToLine},
     widgets::Paragraph,
 };
-use steve::{Instance, ModpackVersionManifest, ModpacksClient};
+use steve::{InstallTarget, ModpackVersionManifest, ModpacksClient};
 
 use crate::tui::{Action, Component, ConfirmPrompt, Event, InstallPack};
 
-enum State {
+enum State<T> {
     Confirm {
         component: ConfirmPrompt,
         current_version: String,
         latest_version: String,
     },
-    InstallPack(InstallPack<Instance>),
+    InstallPack(InstallPack<T>),
 }
 
-pub struct ModpackUpdate {
-    // I used Rc<RefCell>> to mutate in other child structs.
-    // Using `instance` is a bit yuck with having to call `borrow*` first.
-    // I question why not just use `Instance`. With the shared mutable
-    // you can be sure it's values are always current, even if another componet
-    // mutated it. There is some tiny memory savings by not cloning the whole
-    // instance manifest for each component.
-    instance: Rc<RefCell<Instance>>,
+pub struct ModpackUpdate<T> {
+    instance: T,
     latest_pack: ModpackVersionManifest,
-    state: State,
+    state: State<T>,
 }
 
-impl ModpackUpdate {
+impl<T: InstallTarget> ModpackUpdate<T> {
     pub async fn with_modpack_manifest(
-        instance: Instance,
+        instance: T,
         pack_id: u32,
         current_version: String,
     ) -> Result<Self> {
@@ -72,7 +64,7 @@ impl ModpackUpdate {
         let confirm_prompt = ConfirmPrompt::new("Would you like to (re)install latest version?");
 
         let component = Self {
-            instance: Rc::new(RefCell::new(instance)),
+            instance,
             latest_pack,
             state: State::Confirm {
                 component: confirm_prompt,
@@ -85,7 +77,7 @@ impl ModpackUpdate {
     }
 }
 
-impl Component for ModpackUpdate {
+impl<T: InstallTarget + Clone> Component for ModpackUpdate<T> {
     fn draw(&self, frame: &mut Frame) {
         match &self.state {
             State::Confirm {

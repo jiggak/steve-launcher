@@ -21,7 +21,7 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use crate::Error;
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct InstanceManifest {
     /// Minecraft version
     pub mc_version: String,
@@ -47,7 +47,7 @@ pub struct InstanceManifest {
     pub modpack: Option<Modpack>
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum ModLoaderName {
     #[serde(rename = "forge")]
     Forge,
@@ -77,7 +77,7 @@ impl ToString for ModLoaderName {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct ModLoader {
     pub name: ModLoaderName,
 
@@ -104,7 +104,7 @@ impl ToString for ModLoader {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(untagged)]
 pub enum ModpackId {
     CurseForge {
@@ -117,7 +117,7 @@ pub enum ModpackId {
     // Modrinth
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct Modpack {
     pub id: ModpackId,
     pub files: Vec<String>

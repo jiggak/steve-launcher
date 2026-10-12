@@ -28,6 +28,7 @@ use crate::{
 
 const MANIFEST_FILE: &str = "manifest.json";
 
+#[derive(Clone)]
 pub struct Instance {
     pub manifest: InstanceManifest,
 
