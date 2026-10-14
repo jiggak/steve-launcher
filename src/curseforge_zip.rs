@@ -20,6 +20,7 @@ use anyhow::Result;
 use std::{fs::{self, File}, io, path::{Path, PathBuf}};
 use crate::{json::CurseForgePack, zip};
 
+#[derive(Clone)]
 pub struct CurseForgeZip {
     pub manifest: CurseForgePack,
     zip_temp_dir: PathBuf
@@ -62,6 +63,11 @@ impl CurseForgeZip {
 impl Drop for CurseForgeZip {
     fn drop(&mut self) {
         // delete temp dir created
-        fs::remove_dir_all(&self.zip_temp_dir).unwrap();
+        match fs::remove_dir_all(&self.zip_temp_dir) {
+            Ok(()) => { },
+            // ignore missing directory error; clones might exist (multiple drop, same directory)
+            Err(e) if e.kind() == io::ErrorKind::NotFound => { },
+            e => e.unwrap(),
+        }
     }
 }

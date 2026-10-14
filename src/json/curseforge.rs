@@ -23,7 +23,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::{Error, ModLoader, ModLoaderName};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct CurseForgePack {
     pub minecraft: CurseForgeMinecraft,
     #[serde(rename(deserialize = "manifestType"))]
@@ -51,7 +51,7 @@ impl CurseForgePack {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct CurseForgeMinecraft {
     pub version: String,
     #[serde(rename(deserialize = "modLoaders"))]
@@ -72,13 +72,13 @@ impl CurseForgeMinecraft {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct CurseForgeModloader {
     pub id: String,
     pub primary: bool
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct CurseForgePackFile {
     #[serde(rename(deserialize = "projectID"))]
     pub project_id: u32,

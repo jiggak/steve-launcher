@@ -21,6 +21,7 @@ mod download_blocked;
 mod event_stream;
 mod install_pack;
 mod modpack_update;
+mod modpack_zip_install;
 mod progress_bars;
 mod progress_channel;
 
@@ -30,6 +31,7 @@ pub use {
     event_stream::{Event, EventStreamThread},
     install_pack::InstallPack,
     modpack_update::ModpackUpdate,
+    modpack_zip_install::ModpackZipInstall,
     progress_bars::{ProgressBar, ProgressBars},
     progress_channel::ProgressChannel,
 };
@@ -49,7 +51,7 @@ pub enum Action {
     /// Quit app
     Quit,
     /// User confirmed prompt
-    Confirm,
+    Confirm(bool),
     /// Component completed
     Complete,
 }

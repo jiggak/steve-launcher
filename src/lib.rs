@@ -44,6 +44,7 @@ pub use {
     download_watcher::{watch_downloads, WatcherHandle, WatchList},
     installer::{FileDownload, Installer, InstallTarget},
     instance::Instance,
+    json::CurseForgePack,
     json::ModLoader,
     json::ModLoaderName,
     json::Modpack,

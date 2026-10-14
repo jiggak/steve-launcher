@@ -34,7 +34,7 @@ enum State<T> {
         current_version: String,
         latest_version: String,
     },
-    InstallPack(InstallPack<T>),
+    InstallPack(InstallPack<T, ModpackVersionManifest>),
 }
 
 pub struct ModpackUpdate<T> {
@@ -130,7 +130,11 @@ impl<T: InstallTarget + Clone> Component for ModpackUpdate<T> {
                 install_pack.handle_event(event).await?,
         };
 
-        if let Action::Confirm = action {
+        if let Action::Confirm(is_yes) = action {
+            if !is_yes {
+                return Ok(Action::Quit);
+            }
+
             let install_pack = InstallPack::start_install(
                 self.instance.clone(),
                 self.latest_pack.clone()

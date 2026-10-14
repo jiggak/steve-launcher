@@ -109,10 +109,11 @@ impl ToString for ModLoader {
 pub enum ModpackId {
     CurseForge {
         mod_id: u32,
-        version: String
+        version: String,
     },
     CurseZip {
-        file_name: String
+        pack_name: String,
+        version: String,
     }
     // Modrinth
 }

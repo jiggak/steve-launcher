@@ -60,11 +60,7 @@ impl Component for ConfirmPrompt {
             Event::Key(KeyCode::Char('y')) => self.confirmed = true,
             Event::Key(KeyCode::Char('n')) => self.confirmed = false,
             Event::Key(KeyCode::Enter) => {
-                return if self.confirmed {
-                    Ok(Action::Confirm)
-                } else {
-                    Ok(Action::Quit)
-                }
+                return Ok(Action::Confirm(self.confirmed));
             },
             _ => {}
         }

@@ -29,7 +29,7 @@ use std::{
     thread::{self, JoinHandle}, time::Duration
 };
 
-use crate::{ProgressBars, tui::{App, ModpackUpdate}};
+use crate::{ProgressBars, tui::{App, ModpackUpdate, ModpackZipInstall}};
 use steve::{
     BeginProgress, CurseForgeZip, FileDownload, Installer,
     InstallTarget, Instance, Modpack, ModpackId, ModpackManifest, ModpackVersion,
@@ -185,57 +185,12 @@ pub async fn modpack_zip_install(
     instance_dir: &Path,
     zip_file: &Path
 ) -> Result<()> {
-    let progress = ProgressBars::new();
-
     let pack = CurseForgeZip::load_zip(zip_file)?;
 
-    let mut instance = if Instance::exists(instance_dir) {
-        if !prompt_confirm("Instance already exists, are you sure you want to install the pack here?")? {
-            return Ok(())
-        }
+    let component = ModpackZipInstall::with_zip(instance_dir, pack).await?;
 
-        let mut instance = Instance::load(instance_dir)?;
-
-        instance.set_mc_version(pack.manifest.minecraft.version.clone())?;
-        instance.set_mod_loader(pack.manifest.minecraft.get_mod_loader()?)?;
-
-        instance
-    } else {
-        Instance::create(
-            instance_dir,
-            &pack.manifest.minecraft.version,
-            pack.manifest.minecraft.get_mod_loader()?
-        ).await?
-    };
-
-    let installer = Installer::new(&instance.game_dir());
-    let (pack_files, downloads) = installer.install_pack_zip(&pack, &progress)
-        .await?;
-
-    if let Some(downloads) = downloads {
-        download_blocked(&installer, downloads)?;
-    }
-
-    if let Some(modpack) = &instance.manifest.modpack {
-        let old_files = modpack.files_to_paths();
-
-        installer.clean_pack_files(&old_files, &pack_files)?;
-    }
-
-    let pack_files: Vec<_> = pack_files.iter()
-        .map(|f| f.to_string_lossy().to_string())
-        .collect();
-
-    instance.set_modpack_manifest(
-        Modpack {
-            id: ModpackId::CurseZip {
-                file_name: zip_file.file_name().unwrap().to_string_lossy().to_string()
-            },
-            files: pack_files
-         }
-    )?;
-
-    Ok(())
+    let mut app = App::new(component);
+    app.run().await
 }
 
 pub async fn modpack_update(instance_dir: &Path) -> Result<()> {
@@ -257,9 +212,7 @@ pub async fn modpack_update(instance_dir: &Path) -> Result<()> {
     ).await?;
 
     let mut app = App::new(component);
-    app.run().await?;
-
-    Ok(())
+    app.run().await
 }
 
 enum DownloaderMessage {
