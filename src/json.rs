@@ -16,6 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+// Many json models have unused fields. I prefer to keep them since they
+// represent data from various services.
+#![allow(dead_code)]
+
 mod account_manifest;
 mod asset_manifest;
 mod curseforge;
