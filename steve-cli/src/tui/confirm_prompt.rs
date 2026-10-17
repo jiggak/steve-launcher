@@ -18,7 +18,7 @@
 
 use anyhow::Result;
 use crossterm::event::KeyCode;
-use ratatui::{Frame, buffer::Buffer, layout::Rect, style::Stylize, text::Line, widgets::Widget};
+use ratatui::{Frame, layout::Rect, style::Stylize, text::Line};
 
 use crate::tui::{Action, Component, Event};
 
@@ -36,23 +36,15 @@ impl ConfirmPrompt {
     }
 }
 
-impl Widget for &ConfirmPrompt {
-    fn render(self, area: Rect, buf: &mut Buffer)
-        where Self: Sized
-    {
+impl Component for ConfirmPrompt {
+    fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let line = Line::from(vec![
             self.prompt.as_str().bold(),
             " (y/n) ".dark_gray(),
             (if self.confirmed { "yes" } else { "no" }).green(),
         ]);
 
-        line.render(area, buf);
-    }
-}
-
-impl Component for ConfirmPrompt {
-    fn draw(&self, frame: &mut Frame) {
-        frame.render_widget(self, frame.area());
+        frame.render_widget(line, area);
     }
 
     async fn handle_event(&mut self, event: &Event) -> Result<Action> {

@@ -41,9 +41,9 @@ impl ProgressBars {
 }
 
 impl Component for ProgressBars {
-    fn draw(&self, frame: &mut Frame) {
+    fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let layout = Layout::vertical([Constraint::Length(4), Constraint::Length(4)]);
-        let areas = frame.area().layout_vec(&layout);
+        let areas = area.layout_vec(&layout);
 
         for (i, bar) in self.bars.iter().enumerate() {
             render_bar(&bar, frame, areas[i]);

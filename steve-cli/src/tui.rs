@@ -17,30 +17,38 @@
  */
 
 mod confirm_prompt;
+mod debounce;
 mod download_blocked;
 mod event_stream;
 mod install_pack;
+mod modpack_search;
 mod modpack_update;
 mod modpack_zip_install;
 mod progress_bars;
 mod progress_channel;
+mod select_list;
+mod text_input;
 
 pub use {
     confirm_prompt::ConfirmPrompt,
     download_blocked::DownloadBlocked,
     event_stream::{Event, EventStreamThread},
     install_pack::InstallPack,
+    modpack_search::ModpackSearch,
     modpack_update::ModpackUpdate,
     modpack_zip_install::ModpackZipInstall,
     progress_bars::{ProgressBar, ProgressBars},
     progress_channel::ProgressChannel,
+    select_list::SelectList,
+    text_input:: TextInput,
 };
 
 use anyhow::Result;
-use ratatui::Frame;
+use ratatui::{Frame, layout::Rect};
 
 pub trait Component {
-    fn draw(&self, frame: &mut Frame);
+    fn draw(&mut self, frame: &mut Frame, area: Rect);
+
     async fn handle_event(&mut self, event: &Event) -> Result<Action>;
 }
 
@@ -54,6 +62,10 @@ pub enum Action {
     Confirm(bool),
     /// Component completed
     Complete,
+    /// User changed text input
+    Change(String),
+    /// User selected item in list
+    Select(usize),
 }
 
 pub struct App<C> {
@@ -90,8 +102,8 @@ impl<C: Component> App<C> {
         Ok(())
     }
 
-    fn draw(&self, frame: &mut Frame) {
-        self.component.draw(frame);
+    fn draw(&mut self, frame: &mut Frame) {
+        self.component.draw(frame, frame.area());
     }
 
     async fn handle_event(&mut self, event: &Event) -> Result<Action> {

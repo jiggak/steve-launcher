@@ -19,7 +19,7 @@
 use anyhow::{Result, anyhow};
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Layout},
+    layout::{Alignment, Constraint, Layout, Rect},
     style::Stylize,
     text::{Line, Text},
     widgets::Paragraph,
@@ -79,19 +79,15 @@ impl<T: InstallTarget> ModpackUpdate<T> {
 }
 
 impl<T: InstallTarget + Clone> Component for ModpackUpdate<T> {
-    fn draw(&self, frame: &mut Frame) {
-        match &self.state {
-            State::Confirm {
-                component,
-                current_version,
-                latest_version,
-            } => {
+    fn draw(&mut self, frame: &mut Frame, area: Rect) {
+        match &mut self.state {
+            State::Confirm { component, current_version, latest_version } => {
                 let frame_layout = Layout::vertical([
                     Constraint::Length(3),
                     Constraint::Fill(1),
                 ]);
 
-                let [versions_area, prompt_area] = frame.area().layout(&frame_layout);
+                let [versions_area, prompt_area] = area.layout(&frame_layout);
 
                 let versions_layout = Layout::horizontal([
                     Constraint::Length(10),
@@ -114,10 +110,10 @@ impl<T: InstallTarget + Clone> Component for ModpackUpdate<T> {
                 frame.render_widget(labels, labels_area);
                 frame.render_widget(versions, values_area);
 
-                frame.render_widget(component, prompt_area);
+                component.draw(frame, prompt_area);
             }
             State::InstallPack(install_pack) => {
-                install_pack.draw(frame);
+                install_pack.draw(frame, area);
             }
         }
     }

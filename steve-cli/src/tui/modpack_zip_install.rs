@@ -19,7 +19,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use ratatui::Frame;
+use ratatui::{Frame, layout::Rect};
 use steve::{CurseForgeZip, Instance};
 
 use crate::tui::{Action, Component, ConfirmPrompt, Event, InstallPack};
@@ -67,10 +67,10 @@ impl ModpackZipInstall {
 }
 
 impl Component for ModpackZipInstall {
-    fn draw(&self, frame: &mut Frame) {
-        match &self.state {
-            State::Prompt(component) => component.draw(frame),
-            State::Install(component) => component.draw(frame),
+    fn draw(&mut self, frame: &mut Frame, area: Rect) {
+        match &mut self.state {
+            State::Prompt(component) => component.draw(frame, area),
+            State::Install(component) => component.draw(frame, area),
         }
     }
 

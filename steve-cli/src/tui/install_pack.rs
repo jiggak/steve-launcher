@@ -19,7 +19,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use ratatui::Frame;
+use ratatui::{Frame, layout::Rect};
 use steve::{
     CurseForgeZip, FileDownload, InstallTarget, Installer, Modpack, ModpackId,
     ModpackVersionManifest
@@ -66,13 +66,13 @@ impl<T: InstallTarget, P: InstallHandler> InstallPack<T, P> {
 }
 
 impl<T: InstallTarget, P: InstallHandler> Component for InstallPack<T, P> {
-    fn draw(&self, frame: &mut Frame) {
-        match &self.state {
+    fn draw(&mut self, frame: &mut Frame, area: Rect) {
+        match &mut self.state {
             State::InstallPack { component, .. } => {
-                component.draw(frame);
+                component.draw(frame, area);
             },
             State::DownloadBlocked { component, .. } => {
-                component.draw(frame);
+                component.draw(frame, area);
             }
         }
     }

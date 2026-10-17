@@ -29,7 +29,7 @@ use std::{
     thread::{self, JoinHandle}, time::Duration
 };
 
-use crate::{ProgressBars, tui::{App, ModpackUpdate, ModpackZipInstall}};
+use crate::{ProgressBars, tui::{App, ModpackSearch, ModpackUpdate, ModpackZipInstall}};
 use steve::{
     BeginProgress, CurseForgeZip, FileDownload, Installer,
     InstallTarget, Instance, Modpack, ModpackId, ModpackManifest, ModpackVersion,
@@ -42,6 +42,19 @@ pub async fn modpack_search_and_install(
     search: &str,
     limit: u8
 ) -> Result<()> {
+    let component = ModpackSearch::new(search, limit);
+
+    let mut app = App::new(component);
+    app.run().await
+}
+
+// TODO remove unused code when new ModpackSearchInstall comnponent is complete
+pub async fn modpack_search_and_install_old(
+    instance_dir: &Path,
+    search: &str,
+    limit: u8
+) -> Result<()> {
+
     let pack = search_modpacks(search, limit).await?;
 
     let mut instance = if Instance::exists(instance_dir) {

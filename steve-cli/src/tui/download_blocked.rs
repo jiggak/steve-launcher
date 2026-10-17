@@ -20,7 +20,7 @@ use std::{io::Result as IoResult, path::Path, process::{Command, Stdio}, sync::{
 
 use anyhow::Result;
 use crossterm::event::KeyCode;
-use ratatui::{layout::{Constraint, Layout}, style::Stylize, text::Line, widgets::{Block, Paragraph}};
+use ratatui::{Frame, layout::{Constraint, Layout, Rect}, style::Stylize, text::Line, widgets::{Block, Paragraph}};
 use steve::{FileDownload, Installer, WatchList, WatcherHandle, watch_downloads};
 
 use crate::tui::Component;
@@ -84,10 +84,9 @@ impl DownloadBlocked {
 }
 
 impl Component for DownloadBlocked {
-    fn draw(&self, frame: &mut ratatui::Frame) {
+    fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let layout = Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]);
-        let [title_area, body_area] = frame.area()
-            .layout(&layout);
+        let [title_area, body_area] = area.layout(&layout);
 
         let title = Line::from("Files below must be downloaded manually")
             .centered()
