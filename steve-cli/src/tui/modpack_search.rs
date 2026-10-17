@@ -21,19 +21,20 @@ use crossterm::event::KeyCode;
 use ratatui::{
     Frame,
     layout::{Layout, Rect, Spacing},
+    style::Stylize,
     symbols::merge::MergeStrategy,
-    text::ToText,
+    text::{Line, Span, Text, ToText},
     widgets::{Block, Padding, Paragraph}
 };
 use steve::{ModpackManifest, ModpacksClient};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 
-use crate::tui::{Action, Component, Event, SelectList, TextInput};
+use crate::tui::{Action, Component, Event, ListEntry, SelectList, TextInput};
 
 pub struct ModpackSearch {
     handle: Option<ThreadHandle>,
     search: TextInput,
-    results: SelectList,
+    results: SelectList<ModpackManifest>,
     limit: u8,
 }
 
@@ -54,9 +55,7 @@ impl ModpackSearch {
             while let Ok(event) = handle.receiver.try_recv() {
                 match event {
                     ThreadEvent::Results(r) => {
-                        self.results.items = r.iter()
-                            .map(|r| r.name.to_string())
-                            .collect();
+                        self.results.set_items(r);
                         return Ok(None);
                     },
                     ThreadEvent::Status(status) => {
@@ -184,4 +183,16 @@ async fn search_modpacks(
     }
 
     Ok(search_results)
+}
+
+impl ListEntry for ModpackManifest {
+    fn to_text(&self, width: usize) -> Text<'_> {
+        let author = self.authors.first().map_or("", |a| &a.name);
+
+        let left = self.name.as_str().bold();
+        let right = format!("by: {}", author).italic().dim();
+        let pad = width.saturating_sub(left.width() + right.width());
+
+        Line::from(vec![left, Span::raw(" ".repeat(pad)), right]).into()
+    }
 }

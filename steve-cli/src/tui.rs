@@ -39,7 +39,7 @@ pub use {
     modpack_zip_install::ModpackZipInstall,
     progress_bars::{ProgressBar, ProgressBars},
     progress_channel::ProgressChannel,
-    select_list::SelectList,
+    select_list::{ListEntry, SelectList},
     text_input:: TextInput,
 };
 

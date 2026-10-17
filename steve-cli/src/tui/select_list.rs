@@ -19,28 +19,42 @@
 use anyhow::Result;
 use crossterm::event::KeyCode;
 use ratatui::{
-    Frame, layout::Rect, style::Style, text::ToText, widgets::{List, ListState}
+    Frame, layout::Rect, style::Style, text::Text, widgets::{List, ListState}
 };
 
 use crate::tui::{Action, Component, Event};
 
-pub struct SelectList {
-    pub items: Vec<String>,
+pub trait ListEntry {
+    fn to_text(&self, width: usize) -> Text<'_>;
+}
+
+pub struct SelectList<T: ListEntry> {
+    items: Vec<T>,
     list_state: ListState,
 }
 
-impl SelectList {
+impl<T: ListEntry> SelectList<T> {
     pub fn new() -> Self {
         Self {
             items: vec![],
             list_state: ListState::default().with_selected(Some(0)),
         }
     }
+
+    pub fn items(&self) -> &Vec<T> {
+        &self.items
+    }
+
+    pub fn set_items(&mut self, items: Vec<T>) {
+        self.items = items;
+    }
 }
 
-impl Component for SelectList {
+impl<T: ListEntry> Component for SelectList<T> {
     fn draw(&mut self, frame: &mut Frame, area: Rect) {
-        let list_items = self.items.iter().map(|s| s.to_text());
+        let list_items = self.items.iter()
+            .map(|s| s.to_text(area.width as usize - 2));
+
         let list = List::new(list_items)
             .highlight_style(Style::new().reversed())
             .highlight_symbol("> ");
