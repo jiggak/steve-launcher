@@ -84,6 +84,8 @@ impl DownloadBlocked {
 }
 
 impl Component for DownloadBlocked {
+    type Output = ();
+
     fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let layout = Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]);
         let [title_area, body_area] = area.layout(&layout);
@@ -114,9 +116,9 @@ impl Component for DownloadBlocked {
         frame.render_widget(list, body_area);
     }
 
-    async fn handle_event(&mut self, event: &Event) -> Result<Action> {
+    async fn handle_event(&mut self, event: &Event) -> Result<Action<Self::Output>> {
         if self.watch_list.lock().unwrap().is_all_complete() {
-            return Ok(Action::Complete);
+            return Ok(Action::Done(()));
         }
 
         match event {
@@ -129,7 +131,7 @@ impl Component for DownloadBlocked {
             _ => { }
         }
 
-        Ok(Action::Noop)
+        Ok(Action::Continue)
     }
 }
 

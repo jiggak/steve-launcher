@@ -16,69 +16,74 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use crossterm::{
     ExecutableCommand, QueueableCommand, cursor,
     event::{self, Event, KeyCode, KeyEventKind}, terminal
 };
 use dialoguer::Select;
 use std::{
-    io::{Result as IoResult, Stdout, Write, stdout}, path::{Path, PathBuf},
+    io::{Result as IoResult, Stdout, Write, stdout},
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::{Arc, atomic::{AtomicBool, Ordering}, mpsc::{self, Sender}},
-    thread::{self, JoinHandle}, time::Duration
+    thread::{self, JoinHandle},
+    time::Duration
 };
 
-use crate::{ProgressBars, tui::{App, ModpackSearch, ModpackUpdate, ModpackZipInstall}};
+use crate::{
+    ProgressBars,
+    tui::{ComponentFlow, InstallPack, ModpackSearch, ModpackUpdate, ModpackZipInstall, run}
+};
 use steve::{
-    BeginProgress, CurseForgeZip, FileDownload, Installer,
-    InstallTarget, Instance, Modpack, ModpackId, ModpackManifest, ModpackVersion,
+    BeginProgress, CurseForgeZip, FileDownload, InstallTarget, Installer,
+    Instance, ModLoader, Modpack, ModpackId, ModpackManifest, ModpackVersion,
     ModpackVersionManifest, ModpacksClient, Progress, WatchList, watch_downloads
 };
-use super::{console_theme, prompt_confirm};
+use super::console_theme;
 
 pub async fn modpack_search_and_install(
     instance_dir: &Path,
     search: &str,
     limit: u8
 ) -> Result<()> {
-    let component = ModpackSearch::new(search, limit);
+    let use_existing = false;
 
-    let mut app = App::new(component);
-    app.run().await
-}
+    let mut flow = ModpackSearch::new(search, limit)
+        .then(async |pack| {
+            let instance = load_or_create_instance(
+                instance_dir,
+                use_existing,
+                &pack.get_minecraft_version()?,
+                pack.get_mod_loader()?
+            ).await?;
 
-// TODO remove unused code when new ModpackSearchInstall comnponent is complete
-pub async fn modpack_search_and_install_old(
-    instance_dir: &Path,
-    search: &str,
-    limit: u8
-) -> Result<()> {
+            Ok(InstallPack::start_install(instance, pack))
+        });
 
-    let pack = search_modpacks(search, limit).await?;
-
-    let mut instance = if Instance::exists(instance_dir) {
-        if !prompt_confirm("Instance already exists, are you sure you want to install the pack here?")? {
-            return Ok(())
-        }
-
-        let mut instance = Instance::load(instance_dir)?;
-
-        instance.set_mc_version(pack.get_minecraft_version()?)?;
-        instance.set_mod_loader(pack.get_mod_loader()?)?;
-
-        instance
-    } else {
-        Instance::create(
-            instance_dir,
-            &pack.get_minecraft_version()?,
-            pack.get_mod_loader()?
-        ).await?
-    };
-
-    install_pack(&mut instance, false, &pack).await?;
+    run(&mut flow).await?;
 
     Ok(())
+}
+
+async fn load_or_create_instance(
+    instance_dir: &Path,
+    use_existing: bool,
+    mc_version: &str,
+    mod_loader: Option<ModLoader>
+) -> Result<Instance> {
+    let instance = if Instance::exists(instance_dir) {
+        if use_existing {
+            Instance::load(instance_dir)?
+        } else {
+            // TODO make this an error type for handling gracefully
+            return Err(anyhow!("Instance already exists, pass -e to use existing anyway"))
+        }
+    } else {
+        Instance::create(instance_dir, mc_version, mod_loader).await?
+    };
+
+    Ok(instance)
 }
 
 pub async fn search_modpacks(search: &str, limit: u8) -> Result<ModpackVersionManifest> {
@@ -200,10 +205,10 @@ pub async fn modpack_zip_install(
 ) -> Result<()> {
     let pack = CurseForgeZip::load_zip(zip_file)?;
 
-    let component = ModpackZipInstall::with_zip(instance_dir, pack).await?;
+    let mut component = ModpackZipInstall::with_zip(instance_dir, pack).await?;
+    run(&mut component).await?;
 
-    let mut app = App::new(component);
-    app.run().await
+    Ok(())
 }
 
 pub async fn modpack_update(instance_dir: &Path) -> Result<()> {
@@ -218,14 +223,15 @@ pub async fn modpack_update(instance_dir: &Path) -> Result<()> {
 
     let (pack_id, version) = (*mod_id, version.clone());
 
-    let component = ModpackUpdate::with_modpack_manifest(
+    let mut component = ModpackUpdate::with_modpack_manifest(
         instance,
         pack_id,
         version
     ).await?;
 
-    let mut app = App::new(component);
-    app.run().await
+    run(&mut component).await?;
+
+    Ok(())
 }
 
 enum DownloaderMessage {

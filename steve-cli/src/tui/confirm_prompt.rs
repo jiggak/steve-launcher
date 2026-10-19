@@ -37,6 +37,8 @@ impl ConfirmPrompt {
 }
 
 impl Component for ConfirmPrompt {
+    type Output = bool;
+
     fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let line = Line::from(vec![
             self.prompt.as_str().bold(),
@@ -47,16 +49,16 @@ impl Component for ConfirmPrompt {
         frame.render_widget(line, area);
     }
 
-    async fn handle_event(&mut self, event: &Event) -> Result<Action> {
+    async fn handle_event(&mut self, event: &Event) -> Result<Action<Self::Output>> {
         match event {
             Event::Key(KeyCode::Char('y')) => self.confirmed = true,
             Event::Key(KeyCode::Char('n')) => self.confirmed = false,
             Event::Key(KeyCode::Enter) => {
-                return Ok(Action::Confirm(self.confirmed));
+                return Ok(Action::Done(self.confirmed));
             },
             _ => {}
         }
 
-        Ok(Action::Noop)
+        Ok(Action::Continue)
     }
 }

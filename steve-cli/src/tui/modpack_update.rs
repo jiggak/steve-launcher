@@ -79,6 +79,8 @@ impl<T: InstallTarget> ModpackUpdate<T> {
 }
 
 impl<T: InstallTarget + Clone> Component for ModpackUpdate<T> {
+    type Output = ();
+
     fn draw(&mut self, frame: &mut Frame, area: Rect) {
         match &mut self.state {
             State::Confirm { component, current_version, latest_version } => {
@@ -118,26 +120,28 @@ impl<T: InstallTarget + Clone> Component for ModpackUpdate<T> {
         }
     }
 
-    async fn handle_event(&mut self, event: &Event) -> anyhow::Result<Action> {
+    async fn handle_event(&mut self, event: &Event) -> anyhow::Result<Action<Self::Output>> {
         let action = match &mut self.state {
-            State::Confirm { component: prompt, .. } =>
-                prompt.handle_event(event).await?,
-            State::InstallPack(install_pack) =>
-                install_pack.handle_event(event).await?,
-        };
+            State::Confirm { component: prompt, .. } => {
+                if let Action::Done(is_yes) = prompt.handle_event(event).await? {
+                    if !is_yes {
+                        return Ok(Action::Quit);
+                    }
 
-        if let Action::Confirm(is_yes) = action {
-            if !is_yes {
-                return Ok(Action::Quit);
+                    let install_pack = InstallPack::start_install(
+                        self.instance.clone(),
+                        self.latest_pack.clone()
+                    );
+
+                    self.state = State::InstallPack(install_pack)
+                }
+
+                Action::Continue
+            },
+            State::InstallPack(install_pack) => {
+                install_pack.handle_event(event).await?
             }
-
-            let install_pack = InstallPack::start_install(
-                self.instance.clone(),
-                self.latest_pack.clone()
-            );
-
-            self.state = State::InstallPack(install_pack)
-        }
+        };
 
         Ok(action)
     }

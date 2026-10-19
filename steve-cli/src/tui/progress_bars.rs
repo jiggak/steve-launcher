@@ -41,6 +41,8 @@ impl ProgressBars {
 }
 
 impl Component for ProgressBars {
+    type Output = ();
+
     fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let layout = Layout::vertical([Constraint::Length(4), Constraint::Length(4)]);
         let areas = area.layout_vec(&layout);
@@ -50,8 +52,8 @@ impl Component for ProgressBars {
         }
     }
 
-    async fn handle_event(&mut self, _event: &Event) -> anyhow::Result<Action> {
-        Ok(Action::Noop)
+    async fn handle_event(&mut self, _event: &Event) -> anyhow::Result<Action<Self::Output>> {
+        Ok(Action::Continue)
     }
 }
 

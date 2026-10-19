@@ -66,6 +66,8 @@ impl<T: InstallTarget, P: InstallHandler> InstallPack<T, P> {
 }
 
 impl<T: InstallTarget, P: InstallHandler> Component for InstallPack<T, P> {
+    type Output = ();
+
     fn draw(&mut self, frame: &mut Frame, area: Rect) {
         match &mut self.state {
             State::InstallPack { component, .. } => {
@@ -77,7 +79,7 @@ impl<T: InstallTarget, P: InstallHandler> Component for InstallPack<T, P> {
         }
     }
 
-    async fn handle_event(&mut self, event: &Event) -> Result<Action> {
+    async fn handle_event(&mut self, event: &Event) -> Result<Action<Self::Output>> {
         let action = match &mut self.state {
             State::InstallPack { component, receiver } => {
                 while let Ok(event) = receiver.try_recv() {
@@ -96,8 +98,7 @@ impl<T: InstallTarget, P: InstallHandler> Component for InstallPack<T, P> {
                                         component,
                                         installed_files: pack_files
                                     };
-                                    return Ok(Action::Noop);
-
+                                    return Ok(Action::Continue);
                                 } else {
                                     self.pack.finish_install(&mut self.instance, &pack_files)?;
                                     return Ok(Action::Quit);
@@ -113,11 +114,11 @@ impl<T: InstallTarget, P: InstallHandler> Component for InstallPack<T, P> {
                     }
                 }
 
-                Action::Noop
+                Action::Continue
             },
             State::DownloadBlocked { component, installed_files } => {
                 match component.handle_event(event).await? {
-                    Action::Complete => {
+                    Action::Done(_) => {
                         self.pack.finish_install(&mut self.instance, installed_files)?;
                         Action::Quit
                     },

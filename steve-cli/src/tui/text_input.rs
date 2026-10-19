@@ -40,6 +40,8 @@ impl TextInput {
 }
 
 impl Component for TextInput {
+    type Output = String;
+
     fn draw(&mut self, frame: &mut Frame, area: Rect) {
         frame.render_widget(self.text.to_span(), area);
 
@@ -49,9 +51,8 @@ impl Component for TextInput {
         ));
     }
 
-    async fn handle_event(&mut self, event: &Event) -> Result<Action> {
+    async fn handle_event(&mut self, event: &Event) -> Result<Action<Self::Output>> {
         match event {
-            Event::Key(KeyCode::Esc) => return Ok(Action::Quit),
             Event::Key(KeyCode::Char(c)) => {
                 self.text.push(*c);
                 self.debouncer.push(self.text.clone());
@@ -64,9 +65,9 @@ impl Component for TextInput {
         }
 
         let action = if let Some(text) = self.debouncer.poll() {
-            Action::Change(text)
+            Action::Done(text)
         } else {
-            Action::Noop
+            Action::Continue
         };
 
         Ok(action)

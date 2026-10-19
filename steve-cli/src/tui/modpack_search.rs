@@ -26,7 +26,7 @@ use ratatui::{
     text::{Line, Span, Text, ToText},
     widgets::{Block, Padding, Paragraph}
 };
-use steve::{ModpackManifest, ModpacksClient};
+use steve::{ModpackManifest, ModpackVersionManifest, ModpacksClient};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 
 use crate::tui::{Action, Component, Event, ListEntry, SelectList, TextInput};
@@ -75,6 +75,8 @@ impl ModpackSearch {
 }
 
 impl Component for ModpackSearch {
+    type Output = ModpackVersionManifest;
+
     fn draw(&mut self, frame: &mut Frame, area: Rect) {
         use ratatui::layout::Constraint::*;
 
@@ -109,20 +111,32 @@ impl Component for ModpackSearch {
         }
     }
 
-    async fn handle_event(&mut self, event: &Event) -> Result<Action> {
+    async fn handle_event(&mut self, event: &Event) -> Result<Action<Self::Output>> {
         self.handle = self.handle_thread_events()?;
 
-        if let Action::Change(search) = self.search.handle_event(event).await? {
+        if let Action::Done(search) = self.search.handle_event(event).await? {
             self.handle = Some(start_search_thread(search, self.limit));
         }
 
-        if let Action::Select(index) = self.results.handle_event(event).await? {
-            // TODO who is going to handle fetching pack versons and prompting user?
+        if let Action::Done(index) = self.results.handle_event(event).await? {
+            // TODO prompt user to select pack version
+            let selected_pack = &self.results.items()[index];
+            let selected_version = selected_pack.versions.first().unwrap();
+
+            let client = ModpacksClient::new();
+
+            let pack = if selected_pack.provider == "curseforge" {
+                client.get_curse_modpack(selected_pack.pack_id, selected_version.version_id).await?
+            } else {
+                client.get_ftb_modpack(selected_pack.pack_id, selected_version.version_id).await?
+            };
+
+            return Ok(Action::Done(pack));
         }
 
         let action = match event {
             Event::Key(KeyCode::Esc) => Action::Quit,
-            _ => Action::Noop
+            _ => Action::Continue
         };
 
         Ok(action)

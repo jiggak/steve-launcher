@@ -67,6 +67,8 @@ impl ModpackZipInstall {
 }
 
 impl Component for ModpackZipInstall {
+    type Output = ();
+
     fn draw(&mut self, frame: &mut Frame, area: Rect) {
         match &mut self.state {
             State::Prompt(component) => component.draw(frame, area),
@@ -74,30 +76,30 @@ impl Component for ModpackZipInstall {
         }
     }
 
-    async fn handle_event(&mut self, event: &Event) -> Result<Action> {
+    async fn handle_event(&mut self, event: &Event) -> Result<Action<Self::Output>> {
         let action = match &mut self.state {
             State::Prompt(component) => {
-                component.handle_event(event).await?
+                if let Action::Done(is_yes) = component.handle_event(event).await? {
+                    if !is_yes {
+                        return Ok(Action::Quit);
+                    }
+
+                    let instance = Instance::load(&self.instance_dir)?;
+
+                    let component = InstallPack::start_install(
+                        instance,
+                        self.pack.clone()
+                    );
+
+                    self.state = State::Install(component);
+                }
+
+                Action::Continue
             },
             State::Install(component) => {
                 component.handle_event(event).await?
             },
         };
-
-        if let Action::Confirm(is_yes) = action {
-            if !is_yes {
-                return Ok(Action::Quit);
-            }
-
-            let instance = Instance::load(&self.instance_dir)?;
-
-            let component = InstallPack::start_install(
-                instance,
-                self.pack.clone()
-            );
-
-            self.state = State::Install(component);
-        }
 
         Ok(action)
     }

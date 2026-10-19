@@ -51,6 +51,8 @@ impl<T: ListEntry> SelectList<T> {
 }
 
 impl<T: ListEntry> Component for SelectList<T> {
+    type Output = usize;
+
     fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let list_items = self.items.iter()
             .map(|s| s.to_text(area.width as usize - 2));
@@ -62,18 +64,18 @@ impl<T: ListEntry> Component for SelectList<T> {
         frame.render_stateful_widget(list, area, &mut self.list_state);
     }
 
-    async fn handle_event(&mut self, event: &Event) -> Result<Action> {
+    async fn handle_event(&mut self, event: &Event) -> Result<Action<Self::Output>> {
         match event {
             Event::Key(KeyCode::Up) => self.list_state.select_previous(),
             Event::Key(KeyCode::Down) => self.list_state.select_next(),
             Event::Key(KeyCode::Enter) => {
                 if let Some(index) = self.list_state.selected() {
-                    return Ok(Action::Select(index));
+                    return Ok(Action::Done(index));
                 }
             },
             _ => { }
         }
 
-        Ok(Action::Noop)
+        Ok(Action::Continue)
    }
 }

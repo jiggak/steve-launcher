@@ -47,66 +47,89 @@ use anyhow::Result;
 use ratatui::{Frame, layout::Rect};
 
 pub trait Component {
+    type Output;
+
     fn draw(&mut self, frame: &mut Frame, area: Rect);
 
-    async fn handle_event(&mut self, event: &Event) -> Result<Action>;
+    async fn handle_event(&mut self, event: &Event) -> Result<Action<Self::Output>>;
 }
 
 #[derive(Debug)]
-pub enum Action {
-    /// No action (probably should use Option<Action> instead)
-    Noop,
+pub enum Action<T> {
+    /// No action; app continues run loop
+    Continue,
     /// Quit app
     Quit,
-    /// User confirmed prompt
-    Confirm(bool),
-    /// Component completed
-    Complete,
-    /// User changed text input
-    Change(String),
-    /// User selected item in list
-    Select(usize),
+    /// Component produced result
+    Done(T),
 }
 
-pub struct App<C> {
-    component: C,
-}
+pub async fn run<C: Component>(component: &mut C) -> Result<Option<C::Output>> {
+    let mut events = EventStreamThread::start(20.0);
+    let mut terminal = ratatui::init();
 
-impl<C: Component> App<C> {
-    pub fn new(component: C) -> Self {
-        Self {
-            component,
-        }
-    }
-
-    pub async fn run(&mut self) -> Result<()> {
-        let mut events = EventStreamThread::start(20.0);
-        let mut terminal = ratatui::init();
-
+    let result = async {
         loop {
+            terminal.draw(|f| component.draw(f, f.area()))?;
+
             let event = events.next().await?;
-            let action = self.handle_event(&event).await?;
-
-            if let Action::Quit = action {
-                break;
+            match component.handle_event(&event).await? {
+                Action::Quit => return Ok(None),
+                Action::Done(output) => return Ok(Some(output)),
+                Action::Continue => { },
             }
-
-            terminal.draw(|frame| {
-                self.draw(frame);
-            })?;
         }
+    }.await;
 
-        events.stop();
-        ratatui::restore();
+    // restore even if the loop errored
+    events.stop();
+    ratatui::restore();
 
-        Ok(())
+    result
+}
+
+pub enum ComponentChain<A, B, F> {
+    First { a: A, f: Option<F> },
+    Next(B),
+}
+
+impl<A, B, F> Component for ComponentChain<A, B, F>
+where
+    A: Component,
+    B: Component,
+    F: AsyncFnOnce(A::Output) -> Result<B>,
+{
+    type Output = B::Output;
+
+    fn draw(&mut self, frame: &mut Frame, area: Rect) {
+        match self {
+            ComponentChain::First { a, .. } => a.draw(frame, area),
+            ComponentChain::Next(b) => b.draw(frame, area),
+        }
     }
 
-    fn draw(&mut self, frame: &mut Frame) {
-        self.component.draw(frame, frame.area());
-    }
-
-    async fn handle_event(&mut self, event: &Event) -> Result<Action> {
-        self.component.handle_event(event).await
+    async fn handle_event(&mut self, event: &Event) -> Result<Action<B::Output>> {
+        match self {
+            ComponentChain::First { a, f } => match a.handle_event(event).await? {
+                Action::Continue => Ok(Action::Continue),
+                Action::Quit => Ok(Action::Quit),
+                Action::Done(output) => {
+                    let f = f.take().unwrap();
+                    *self = ComponentChain::Next(f(output).await?);
+                    Ok(Action::Continue)
+                },
+            },
+            ComponentChain::Next(b) => b.handle_event(event).await,
+        }
     }
 }
+
+pub trait ComponentFlow: Component + Sized {
+    fn then<B, F>(self, f: F) -> ComponentChain<Self, B, F>
+        where B: Component, F: AsyncFnOnce(Self::Output) -> Result<B>,
+    {
+        ComponentChain::First { a: self, f: Some(f) }
+    }
+}
+
+impl<C: Component> ComponentFlow for C { }
