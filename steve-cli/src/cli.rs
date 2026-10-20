@@ -68,7 +68,11 @@ pub enum Commands {
     /// Install CurseForge modpack zip into new or existing instance
     Import {
         /// Path to CurseForge modpack zip
-        zip_file: PathBuf
+        zip_file: PathBuf,
+
+        /// Use existing instance
+        #[arg(short)]
+        existing: bool,
     },
 
     /// Search and install FTB or CurseForge modpack into new or existing instance
@@ -76,9 +80,13 @@ pub enum Commands {
         /// Modpack search term
         search: String,
 
+        /// Use existing instance
+        #[arg(short)]
+        existing: bool,
+
         /// Maximum number of search results
         #[arg(short, long, default_value_t = 5, value_parser = clap::value_parser!(u8).range(1..50))]
-        search_limit: u8
+        search_limit: u8,
     },
 
     /// Commands for creating and launching server instances

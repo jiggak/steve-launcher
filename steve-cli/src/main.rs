@@ -63,11 +63,11 @@ async fn main() -> anyhow::Result<()> {
                 msal_login().await
             }
         },
-        Commands::Import { zip_file } => {
-            modpack_zip_install(&instance_dir, &zip_file).await
+        Commands::Import { zip_file, existing } => {
+            modpack_zip_install(&instance_dir, &zip_file, existing).await
         },
-        Commands::Modpack { search, search_limit } => {
-            modpack_search_and_install(&instance_dir, &search, search_limit).await
+        Commands::Modpack { search, existing, search_limit } => {
+            modpack_search_and_install(&instance_dir, &search, existing, search_limit).await
         },
         Commands::Update => {
             modpack_update(&instance_dir).await

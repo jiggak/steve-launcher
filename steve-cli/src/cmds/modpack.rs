@@ -33,7 +33,7 @@ use std::{
 
 use crate::{
     ProgressBars,
-    tui::{ComponentFlow, InstallPack, ModpackSearch, ModpackUpdate, ModpackZipInstall, run}
+    tui::{ComponentFlow, InstallPack, ModpackSearch, ModpackUpdate, run}
 };
 use steve::{
     BeginProgress, CurseForgeZip, FileDownload, InstallTarget, Installer,
@@ -45,10 +45,9 @@ use super::console_theme;
 pub async fn modpack_search_and_install(
     instance_dir: &Path,
     search: &str,
+    use_existing: bool,
     limit: u8
 ) -> Result<()> {
-    let use_existing = false;
-
     let mut flow = ModpackSearch::new(search, limit)
         .then(async |pack| {
             let instance = load_or_create_instance(
@@ -201,11 +200,22 @@ pub async fn install_pack(
 
 pub async fn modpack_zip_install(
     instance_dir: &Path,
-    zip_file: &Path
+    zip_file: &Path,
+    use_existing: bool
 ) -> Result<()> {
     let pack = CurseForgeZip::load_zip(zip_file)?;
 
-    let mut component = ModpackZipInstall::with_zip(instance_dir, pack).await?;
+    let instance = load_or_create_instance(
+        instance_dir,
+        use_existing,
+        &pack.manifest.minecraft.version,
+        pack.manifest.minecraft.get_mod_loader()?
+    ).await?;
+
+    let mut component = InstallPack::start_install(
+        instance,
+        pack
+    );
     run(&mut component).await?;
 
     Ok(())

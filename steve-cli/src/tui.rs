@@ -23,7 +23,6 @@ mod event_stream;
 mod install_pack;
 mod modpack_search;
 mod modpack_update;
-mod modpack_zip_install;
 mod progress_bars;
 mod progress_channel;
 mod select_list;
@@ -36,7 +35,6 @@ pub use {
     install_pack::InstallPack,
     modpack_search::ModpackSearch,
     modpack_update::ModpackUpdate,
-    modpack_zip_install::ModpackZipInstall,
     progress_bars::{ProgressBar, ProgressBars},
     progress_channel::ProgressChannel,
     select_list::{ListEntry, SelectList},
